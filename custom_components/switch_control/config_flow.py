@@ -35,7 +35,7 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self) -> None:
-        """Initialise the config flow."""
+        """Initialize the config flow."""
         self._data: dict[str, Any] = {}
         self._switch_count: int = 0
         self._current_switch: int = 0
