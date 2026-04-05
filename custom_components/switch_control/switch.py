@@ -15,6 +15,7 @@ from .const import (
     CONF_NAME,
     CONF_OUTPUT_ENTITY_IDS,
     CONF_SENSOR_ENTITY_ID,
+    CONF_SWITCHES,
     DOMAIN,
 )
 
@@ -28,17 +29,33 @@ async def async_setup_entry(
 ) -> None:
     """Set up Switch Control switch entities from a config entry."""
     data = hass.data[DOMAIN][entry.entry_id]
+    entities: list[SwitchControlEntity] = []
 
-    async_add_entities(
-        [
+    if CONF_SWITCHES in data:
+        # Multi-switch format: create one entity per configured switch input.
+        for i, switch_cfg in enumerate(data[CONF_SWITCHES]):
+            entities.append(
+                SwitchControlEntity(
+                    entry=entry,
+                    name=switch_cfg[CONF_NAME],
+                    sensor_entity_id=switch_cfg[CONF_SENSOR_ENTITY_ID],
+                    output_entity_ids=switch_cfg[CONF_OUTPUT_ENTITY_IDS],
+                    unique_id=f"{entry.entry_id}_switch_{i + 1}",
+                )
+            )
+    else:
+        # Legacy single-switch format: preserve backward compatibility.
+        entities.append(
             SwitchControlEntity(
                 entry=entry,
                 name=data[CONF_NAME],
                 sensor_entity_id=data[CONF_SENSOR_ENTITY_ID],
                 output_entity_ids=data[CONF_OUTPUT_ENTITY_IDS],
+                unique_id=entry.entry_id,
             )
-        ]
-    )
+        )
+
+    async_add_entities(entities)
 
 
 class SwitchControlEntity(SwitchEntity):
@@ -53,11 +70,12 @@ class SwitchControlEntity(SwitchEntity):
         name: str,
         sensor_entity_id: str,
         output_entity_ids: list[str],
+        unique_id: str,
     ) -> None:
         """Initialize the Switch Control entity."""
         self._entry = entry
         self._attr_name = name
-        self._attr_unique_id = entry.entry_id
+        self._attr_unique_id = unique_id
         self._sensor_entity_id = sensor_entity_id
         self._output_entity_ids = output_entity_ids
         self._attr_is_on = False

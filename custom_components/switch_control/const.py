@@ -5,7 +5,10 @@ DOMAIN = "switch_control"
 CONF_SENSOR_ENTITY_ID = "sensor_entity_id"
 CONF_OUTPUT_ENTITY_IDS = "output_entity_ids"
 CONF_NAME = "name"
+CONF_SWITCH_COUNT = "switch_count"
+CONF_SWITCHES = "switches"
 
 DEFAULT_NAME = "Switch Control"
+SWITCH_COUNT_OPTIONS = ["2", "4"]
 
 PLATFORMS = ["switch"]

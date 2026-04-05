@@ -3,7 +3,18 @@
     "step": {
       "user": {
         "title": "Set up Switch Control",
-        "description": "Configure a switch controller that monitors a sensor and controls lamps and outlets.",
+        "description": "Choose a name for this panel and how many independent switch inputs it should have.",
+        "data": {
+          "name": "Name",
+          "switch_count": "Number of switches"
+        },
+        "data_description": {
+          "switch_count": "Each switch input controls its own set of output entities."
+        }
+      },
+      "switch": {
+        "title": "Configure switch input",
+        "description": "Set up switch {switch_num} of {switch_count}.",
         "data": {
           "name": "Name",
           "sensor_entity_id": "Sensor (input)",
