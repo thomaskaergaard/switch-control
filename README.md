@@ -2,13 +2,13 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 
-A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.home-assistant.io/) that lets a **sensor** entity (on/off input) automatically control one or more **output** entities such as lamps (lights) and outlets (switches).
+A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.home-assistant.io/) that lets **sensor** entities (on/off inputs) automatically control one or more **output** entities such as lamps (lights) and outlets (switches).
 
 ## Features
 
-- Monitor any binary sensor or sensor entity for `on`/`off` state changes.
-- Automatically turn on/off any number of `light` or `switch` entities (lamps, outlets, etc.).
-- The controller itself is exposed as a virtual switch in Home Assistant, so you can also toggle it manually from the UI or automations.
+- Support for **2 or 4 independent switch inputs** per integration entry — ideal for 2-gang or 4-gang wall panels.
+- Each switch input monitors its own sensor entity and controls its own set of output entities.
+- The controller exposes one virtual switch entity per input, so you can also toggle each one manually from the UI or automations.
 - Fully configurable through the Home Assistant UI (no YAML required).
 
 ## Installation
@@ -30,22 +30,25 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
 
 1. Go to **Settings → Devices & Services → Add Integration**.
 2. Search for **Switch Control** and click it.
-3. Fill in the form:
-   - **Name** – a friendly name for this controller (e.g. `Living Room Lamps`).
-   - **Sensor (input)** – the sensor entity whose state drives the outputs (e.g. `sensor.motion_detector`).
-   - **Outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control (e.g. `light.living_room`, `switch.outlet_1`).
-4. Click **Submit**.
+3. **Step 1 – Panel setup:**
+   - **Name** – a friendly name for this panel (e.g. `Living Room Panel`).
+   - **Number of switches** – choose **2** or **4** depending on how many independent inputs the panel has.
+4. **Step 2…N – Configure each switch input** (repeated for each switch):
+   - **Name** – a friendly name for this individual switch (e.g. `Ceiling Light`).
+   - **Sensor (input)** – the sensor entity whose state drives the outputs.
+   - **Outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control.
+5. Click **Submit** on each step.
 
-A new switch entity (e.g. `switch.living_room_lamps`) will appear in Home Assistant. Its state mirrors the sensor and it controls all configured outputs simultaneously.
+One virtual switch entity is created for every configured input (e.g. `switch.ceiling_light`, `switch.floor_lamp`). Each entity's state mirrors its own sensor and controls its own set of outputs simultaneously.
 
 ## How It Works
 
-| Sensor state | Controller switch | Output entities |
+| Sensor state | Virtual switch | Output entities |
 |---|---|---|
 | `on`  | `on`  | all turned **on**  |
 | `off` | `off` | all turned **off** |
 
-The virtual switch can also be toggled manually, independently of the sensor, allowing full manual override.
+Each virtual switch can also be toggled manually, independently of the sensor, allowing full manual override per channel.
 
 ## License
 
