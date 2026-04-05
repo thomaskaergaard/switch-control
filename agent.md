@@ -122,4 +122,9 @@ When making changes:
 4. Translate all string values in the new file (keep keys unchanged).
 
 ### Change the integration version
-Update the `version` field in `manifest.json`.
+Update the `version` field in `manifest.json`. Use [semantic versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`):
+- **PATCH** (`1.0.x`): Bug fixes and minor improvements.
+- **MINOR** (`1.x.0`): Backward-compatible new features.
+- **MAJOR** (`x.0.0`): Breaking changes.
+
+Merging the change to `main` automatically triggers the **Release** GitHub Actions workflow (`.github/workflows/release.yml`), which reads the version from `manifest.json` and creates a matching GitHub release (e.g. `v1.0.0`) and git tag. HACS uses these releases to surface the correct semantic version to users instead of a raw commit SHA.
