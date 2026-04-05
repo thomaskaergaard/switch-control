@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Switch Control",
+        "description": "Configure a switch controller that monitors a sensor and controls lamps and outlets.",
+        "data": {
+          "name": "Name",
+          "sensor_entity_id": "Sensor (input)",
+          "output_entity_ids": "Outputs (lamps and outlets)"
+        },
+        "data_description": {
+          "sensor_entity_id": "The sensor whose state (on/off) will control the outputs.",
+          "output_entity_ids": "The switch or light entities to control."
+        }
+      }
+    },
+    "error": {
+      "sensor_not_found": "The selected sensor entity was not found.",
+      "no_outputs": "Please select at least one output entity."
+    },
+    "abort": {
+      "already_configured": "This Switch Control is already configured."
+    }
+  }
+}
