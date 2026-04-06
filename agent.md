@@ -127,4 +127,10 @@ Update the `version` field in `manifest.json`. Use [semantic versioning](https:/
 - **MINOR** (`1.x.0`): Backward-compatible new features.
 - **MAJOR** (`x.0.0`): Breaking changes.
 
-Merging the change to `main` automatically triggers the **Release** GitHub Actions workflow (`.github/workflows/release.yml`), which reads the version from `manifest.json` and creates a matching GitHub release (e.g. `v1.0.0`) and git tag. HACS uses these releases to surface the correct semantic version to users instead of a raw commit SHA.
+Releasing is done by triggering the **Release** GitHub Actions workflow (`.github/workflows/release.yml`) manually via `workflow_dispatch`. Select the bump type (`patch`, `minor`, or `major`; default: `patch`). The workflow will:
+1. Read the current version from `manifest.json`.
+2. Compute the next version according to [semver](https://semver.org/).
+3. Write the new version back to `manifest.json` and push a commit to `main`.
+4. Create a GitHub release and git tag (e.g. `v1.0.2`).
+
+HACS uses these releases to surface the correct semantic version to users instead of a raw commit SHA.
