@@ -27,8 +27,7 @@
       }
     },
     "error": {
-      "sensor_not_found": "The selected sensor entity was not found.",
-      "no_outputs": "Please select at least one output entity."
+      "sensor_not_found": "The selected sensor entity was not found."
     },
     "abort": {
       "already_configured": "This Switch Control is already configured."
