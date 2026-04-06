@@ -19,12 +19,14 @@
           "name": "Name",
           "sensor_entity_id": "Sensor (input)",
           "output_entity_ids": "Outputs (lamps and outlets)",
-          "long_press_action": "Long press action"
+          "long_press_action": "Long press action",
+          "double_press_action": "Double press action"
         },
         "data_description": {
           "sensor_entity_id": "The sensor whose state (on/off) will control the outputs.",
           "output_entity_ids": "The switch or light entities to control.",
-          "long_press_action": "What to do with the outputs when the button is held for 0.5 s or longer. Events are always fired regardless of this setting."
+          "long_press_action": "What to do with the outputs when the button is held for 0.5 s or longer. Events are always fired regardless of this setting.",
+          "double_press_action": "What to do with the outputs when the button is pressed twice within 0.4 s. Events are always fired regardless of this setting."
         }
       }
     },
@@ -51,12 +53,14 @@
           "name": "Name",
           "sensor_entity_id": "Sensor (input)",
           "output_entity_ids": "Outputs (lamps and outlets)",
-          "long_press_action": "Long press action"
+          "long_press_action": "Long press action",
+          "double_press_action": "Double press action"
         },
         "data_description": {
           "sensor_entity_id": "The sensor whose state (on/off) will control the outputs.",
           "output_entity_ids": "The switch or light entities to control.",
-          "long_press_action": "What to do with the outputs when the button is held for 0.5 s or longer. Events are always fired regardless of this setting."
+          "long_press_action": "What to do with the outputs when the button is held for 0.5 s or longer. Events are always fired regardless of this setting.",
+          "double_press_action": "What to do with the outputs when the button is pressed twice within 0.4 s. Events are always fired regardless of this setting."
         }
       }
     },
@@ -66,6 +70,14 @@
   },
   "selector": {
     "long_press_action": {
+      "options": {
+        "none": "None (fire event only)",
+        "turn_on": "Turn on",
+        "turn_off": "Turn off",
+        "toggle": "Toggle"
+      }
+    },
+    "double_press_action": {
       "options": {
         "none": "None (fire event only)",
         "turn_on": "Turn on",

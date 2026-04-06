@@ -6,10 +6,12 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
 
 ## Features
 
-- Support for **2 or 4 independent switch inputs** per integration entry — ideal for 2-gang or 4-gang wall panels.
+- Support for **1, 2, or 4 independent switch inputs** per integration entry — ideal for 1-gang, 2-gang, or 4-gang wall panels.
 - Each switch input monitors its own sensor entity and controls its own set of output entities.
 - **Toggle on press** — a momentary press (sensor briefly on then off) toggles the output state. The first press turns outputs on; the next press turns them off.
+- **Double press detection** — two presses within 0.4 seconds fire a `switch_control_double_press` event and can optionally apply a built-in action to the output entities.
 - **Long press detection** — holding the input for 0.5 s or longer fires Home Assistant bus events that you can trigger automations from (e.g. dimming a light).
+- All virtual switch entities belonging to the same panel are **grouped under a single device** in the Home Assistant device registry for a cleaner UI.
 - The controller exposes one virtual switch entity per input, so you can also toggle each one manually from the UI or automations.
 - Fully configurable through the Home Assistant UI (no YAML required).
 
@@ -34,15 +36,16 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
 2. Search for **Switch Control** and click it.
 3. **Step 1 – Panel setup:**
    - **Name** – a friendly name for this panel (e.g. `Living Room Panel`).
-   - **Number of switches** – choose **2** or **4** depending on how many independent inputs the panel has.
+   - **Number of switches** – choose **1**, **2**, or **4** depending on how many independent inputs the panel has.
 4. **Step 2…N – Configure each switch input** (repeated for each switch):
    - **Name** – a friendly name for this individual switch (e.g. `Ceiling Light`).
    - **Sensor (input)** – the sensor entity whose state drives the outputs.
    - **Outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control.
    - **Long press action** – what the integration should do with the outputs when the button is held for 0.5 s or longer (see [Long press / hold](#long-press--hold) below).
+   - **Double press action** – what the integration should do with the outputs when the button is pressed twice within 0.4 s (see [Double press](#double-press) below).
 5. Click **Submit** on each step.
 
-One virtual switch entity is created for every configured input (e.g. `switch.ceiling_light`, `switch.floor_lamp`). Each entity's state mirrors its own sensor and controls its own set of outputs simultaneously.
+One virtual switch entity is created for every configured input (e.g. `switch.ceiling_light`, `switch.floor_lamp`). Each entity's state mirrors its own sensor and controls its own set of outputs simultaneously. All entities for the same panel are grouped under a single device.
 
 ## How It Works
 
@@ -55,6 +58,15 @@ A momentary press fires the sensor briefly (`on` → `off`). Instead of mirrorin
 | 1st press | `off` | `on` | all turned **on** |
 | 2nd press | `on` | `off` | all turned **off** |
 
+### Double press
+
+When the sensor is triggered twice within **0.4 seconds**, the integration detects a double press:
+
+- The `switch_control_double_press` event is fired on the Home Assistant event bus.
+- The configurable **Double press action** is applied to the output entities.
+
+Both presses still toggle the virtual switch state (the net result is that the state returns to what it was before the double press). The **Double press action** can override this to set the outputs to a known state.
+
 ### Long press / hold
 
 When the sensor stays `on` for **0.5 seconds or longer**, the integration fires the following [Home Assistant events](https://www.home-assistant.io/docs/configuration/events/) on the event bus and optionally performs a built-in action on the configured output entities:
@@ -62,8 +74,20 @@ When the sensor stays `on` for **0.5 seconds or longer**, the integration fires 
 | Event | When fired | Event data |
 |---|---|---|
 | `switch_control_button_pressed` | Immediately on every press | `entity_id` |
+| `switch_control_double_press` | When a second press is detected within 0.4 s | `entity_id` |
 | `switch_control_long_press` | After 0.5 s of holding | `entity_id` |
 | `switch_control_long_press_released` | When the button is released after a long press | `entity_id` |
+
+#### Configurable double press action
+
+The **Double press action** setting (configured per switch input) lets you choose what the integration does with the output entities when a double press is detected:
+
+| Option | Behaviour |
+|---|---|
+| **None (fire event only)** | No direct output action — only the `switch_control_double_press` event is fired. Use this when you want to handle the double press entirely through automations. |
+| **Turn on** | Turns all configured outputs **on** when a double press is detected. |
+| **Turn off** | Turns all configured outputs **off** when a double press is detected. |
+| **Toggle** | Toggles all configured outputs when a double press is detected. |
 
 #### Configurable long press action
 
@@ -76,7 +100,7 @@ The **Long press action** setting (configured per switch input) lets you choose 
 | **Turn off** | Turns all configured outputs **off** when the long press threshold is reached. |
 | **Toggle** | Toggles all configured outputs when the long press threshold is reached. |
 
-Events are always fired regardless of the long press action setting, so you can combine a built-in action with automation logic if needed.
+Events are always fired regardless of the action settings, so you can combine a built-in action with automation logic if needed.
 
 You can listen for these events in automations to implement advanced behaviours such as dimming a light while the button is held:
 
@@ -94,6 +118,22 @@ automation:
           entity_id: light.ceiling
         data:
           brightness_step_pct: -10
+```
+
+Or trigger a scene on double press:
+
+```yaml
+automation:
+  - alias: "Scene on double press"
+    trigger:
+      - platform: event
+        event_type: switch_control_double_press
+        event_data:
+          entity_id: switch.ceiling_light
+    action:
+      - service: scene.turn_on
+        target:
+          entity_id: scene.movie_mode
 ```
 
 Each virtual switch can also be toggled manually, independently of the sensor, allowing full manual override per channel.

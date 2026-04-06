@@ -20,6 +20,7 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    CONF_DOUBLE_PRESS_ACTION,
     CONF_LONG_PRESS_ACTION,
     CONF_NAME,
     CONF_OUTPUT_ENTITY_IDS,
@@ -28,6 +29,8 @@ from .const import (
     CONF_SWITCHES,
     DEFAULT_NAME,
     DOMAIN,
+    DOUBLE_PRESS_ACTION_NONE,
+    DOUBLE_PRESS_ACTION_OPTIONS,
     LONG_PRESS_ACTION_NONE,
     LONG_PRESS_ACTION_OPTIONS,
     SWITCH_COUNT_OPTIONS,
@@ -109,6 +112,9 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_LONG_PRESS_ACTION: user_input.get(
                             CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE
                         ),
+                        CONF_DOUBLE_PRESS_ACTION: user_input.get(
+                            CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE
+                        ),
                     }
                 )
                 self._current_switch += 1
@@ -141,6 +147,15 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                         options=LONG_PRESS_ACTION_OPTIONS,
                         mode=SelectSelectorMode.LIST,
                         translation_key=CONF_LONG_PRESS_ACTION,
+                    )
+                ),
+                vol.Optional(
+                    CONF_DOUBLE_PRESS_ACTION, default=DOUBLE_PRESS_ACTION_NONE
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=DOUBLE_PRESS_ACTION_OPTIONS,
+                        mode=SelectSelectorMode.LIST,
+                        translation_key=CONF_DOUBLE_PRESS_ACTION,
                     )
                 ),
             }
@@ -217,6 +232,9 @@ class SwitchControlOptionsFlow(OptionsFlow):
                     CONF_LONG_PRESS_ACTION: user_input.get(
                         CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE
                     ),
+                    CONF_DOUBLE_PRESS_ACTION: user_input.get(
+                        CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE
+                    ),
                 }
                 self.hass.config_entries.async_update_entry(
                     self.config_entry,
@@ -249,6 +267,16 @@ class SwitchControlOptionsFlow(OptionsFlow):
                         options=LONG_PRESS_ACTION_OPTIONS,
                         mode=SelectSelectorMode.LIST,
                         translation_key=CONF_LONG_PRESS_ACTION,
+                    )
+                ),
+                vol.Optional(
+                    CONF_DOUBLE_PRESS_ACTION,
+                    default=current.get(CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=DOUBLE_PRESS_ACTION_OPTIONS,
+                        mode=SelectSelectorMode.LIST,
+                        translation_key=CONF_DOUBLE_PRESS_ACTION,
                     )
                 ),
             }
