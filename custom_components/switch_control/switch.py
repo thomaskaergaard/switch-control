@@ -8,19 +8,27 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.const import STATE_ON, STATE_OFF
 
 from .const import (
+    CONF_DOUBLE_PRESS_ACTION,
     CONF_LONG_PRESS_ACTION,
     CONF_NAME,
     CONF_OUTPUT_ENTITY_IDS,
     CONF_SENSOR_ENTITY_ID,
     CONF_SWITCHES,
     DOMAIN,
+    DOUBLE_PRESS_ACTION_NONE,
+    DOUBLE_PRESS_ACTION_TOGGLE,
+    DOUBLE_PRESS_ACTION_TURN_OFF,
+    DOUBLE_PRESS_ACTION_TURN_ON,
+    DOUBLE_PRESS_THRESHOLD,
     EVENT_BUTTON_PRESSED,
+    EVENT_DOUBLE_PRESS,
     EVENT_LONG_PRESS,
     EVENT_LONG_PRESS_RELEASED,
     LONG_PRESS_ACTION_NONE,
@@ -55,6 +63,9 @@ async def async_setup_entry(
                     long_press_action=switch_cfg.get(
                         CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE
                     ),
+                    double_press_action=switch_cfg.get(
+                        CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE
+                    ),
                 )
             )
     else:
@@ -67,6 +78,7 @@ async def async_setup_entry(
                 output_entity_ids=data[CONF_OUTPUT_ENTITY_IDS],
                 unique_id=entry.entry_id,
                 long_press_action=data.get(CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE),
+                double_press_action=data.get(CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE),
             )
         )
 
@@ -87,6 +99,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         output_entity_ids: list[str],
         unique_id: str,
         long_press_action: str = LONG_PRESS_ACTION_NONE,
+        double_press_action: str = DOUBLE_PRESS_ACTION_NONE,
     ) -> None:
         """Initialize the Switch Control entity."""
         self._entry = entry
@@ -95,9 +108,22 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._sensor_entity_id = sensor_entity_id
         self._output_entity_ids = output_entity_ids
         self._long_press_action = long_press_action
+        self._double_press_action = double_press_action
         self._attr_is_on = False
         self._long_press_task: asyncio.Task | None = None
         self._long_press_fired: bool = False
+        self._press_count: int = 0
+        self._double_press_window_task: asyncio.Task | None = None
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info to group all switch entities under one panel device."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry.entry_id)},
+            name=self._entry.data.get(CONF_NAME, self._entry.title),
+            manufacturer="Switch Control",
+            model="Switch Panel",
+        )
 
     async def async_added_to_hass(self) -> None:
         """Register callbacks when entity is added."""
@@ -127,22 +153,68 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         is_on = new_state.state == STATE_ON
 
         if is_on:
-            # Button pressed: toggle the output state immediately
-            self._long_press_fired = False
-            self._attr_is_on = not self._attr_is_on
-            self.async_write_ha_state()
-            self.hass.async_create_task(self._apply_outputs(self._attr_is_on))
+            self._press_count += 1
 
-            # Notify listeners that the button was pressed
-            self.hass.bus.async_fire(
-                EVENT_BUTTON_PRESSED,
-                {"entity_id": self.entity_id},
-            )
+            if self._press_count == 1:
+                # First press: toggle the output state immediately
+                self._long_press_fired = False
+                self._attr_is_on = not self._attr_is_on
+                self.async_write_ha_state()
+                self.hass.async_create_task(self._apply_outputs(self._attr_is_on))
 
-            # Start long-press detection
-            self._long_press_task = self.hass.async_create_task(
-                self._detect_long_press()
-            )
+                # Notify listeners that the button was pressed
+                self.hass.bus.async_fire(
+                    EVENT_BUTTON_PRESSED,
+                    {"entity_id": self.entity_id},
+                )
+
+                # Start long-press detection
+                self._long_press_task = self.hass.async_create_task(
+                    self._detect_long_press()
+                )
+
+                # Start the double-press detection window
+                self._double_press_window_task = self.hass.async_create_task(
+                    self._reset_press_count()
+                )
+
+            elif self._press_count == 2:
+                # Second press within the window — double press detected.
+                # Cancel the double-press window timer.
+                if (
+                    self._double_press_window_task is not None
+                    and not self._double_press_window_task.done()
+                ):
+                    self._double_press_window_task.cancel()
+                    self.hass.async_create_task(
+                        self._await_cancel(self._double_press_window_task)
+                    )
+                self._double_press_window_task = None
+                self._press_count = 0
+
+                # Also cancel any pending long-press timer from the first press.
+                if (
+                    self._long_press_task is not None
+                    and not self._long_press_task.done()
+                ):
+                    self._long_press_task.cancel()
+                    self.hass.async_create_task(self._await_cancel(self._long_press_task))
+                self._long_press_task = None
+
+                # Fire the double-press event.
+                self.hass.bus.async_fire(
+                    EVENT_DOUBLE_PRESS,
+                    {"entity_id": self.entity_id},
+                )
+
+                if self._double_press_action == DOUBLE_PRESS_ACTION_NONE:
+                    # No specific action: treat the second press as a normal toggle.
+                    self._attr_is_on = not self._attr_is_on
+                    self.async_write_ha_state()
+                    self.hass.async_create_task(self._apply_outputs(self._attr_is_on))
+                else:
+                    # Apply the configured action directly, overriding the second press.
+                    self.hass.async_create_task(self._apply_double_press_action())
         else:
             # Button released: cancel any pending long-press timer
             if self._long_press_task is not None and not self._long_press_task.done():
@@ -158,6 +230,11 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                     {"entity_id": self.entity_id},
                 )
                 self._long_press_fired = False
+
+    async def _reset_press_count(self) -> None:
+        """Reset the press counter after the double-press detection window expires."""
+        await asyncio.sleep(DOUBLE_PRESS_THRESHOLD)
+        self._press_count = 0
 
     async def _await_cancel(self, task: asyncio.Task) -> None:
         """Await a cancelled task, suppressing the CancelledError."""
@@ -187,6 +264,21 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             await self._apply_outputs(False)
             self.async_write_ha_state()
         elif self._long_press_action == LONG_PRESS_ACTION_TOGGLE:
+            self._attr_is_on = not self._attr_is_on
+            await self._apply_outputs(self._attr_is_on)
+            self.async_write_ha_state()
+
+    async def _apply_double_press_action(self) -> None:
+        """Apply the configured double-press action to all output entities."""
+        if self._double_press_action == DOUBLE_PRESS_ACTION_TURN_ON:
+            self._attr_is_on = True
+            await self._apply_outputs(True)
+            self.async_write_ha_state()
+        elif self._double_press_action == DOUBLE_PRESS_ACTION_TURN_OFF:
+            self._attr_is_on = False
+            await self._apply_outputs(False)
+            self.async_write_ha_state()
+        elif self._double_press_action == DOUBLE_PRESS_ACTION_TOGGLE:
             self._attr_is_on = not self._attr_is_on
             await self._apply_outputs(self._attr_is_on)
             self.async_write_ha_state()
@@ -222,4 +314,5 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             "sensor_entity_id": self._sensor_entity_id,
             "output_entity_ids": self._output_entity_ids,
             "long_press_action": self._long_press_action,
+            "double_press_action": self._double_press_action,
         }
