@@ -65,9 +65,9 @@ When the sensor is triggered twice within **0.4 seconds**, the integration detec
 - The `switch_control_double_press` event is fired on the Home Assistant event bus.
 - The configurable **Double press action** is applied to the output entities.
 
-Both presses still toggle the virtual switch state (the net result is that the state returns to what it was before the double press). The **Double press action** can override this to set the outputs to a known state.
+When no double press action is configured, both presses toggle the virtual switch state (the net result is that the state returns to what it was before the double press). When a **Double press action** is set to **Toggle**, the outputs are toggled exactly once from the state they were in before the first press. This means the final output matches what a single press would produce.
 
-### Long press / hold
+### Long press and hold
 
 When the sensor stays `on` for **0.5 seconds or longer**, the integration fires the following [Home Assistant events](https://www.home-assistant.io/docs/configuration/events/) on the event bus and optionally performs a built-in action on the configured output entities:
 
@@ -76,7 +76,10 @@ When the sensor stays `on` for **0.5 seconds or longer**, the integration fires 
 | `switch_control_button_pressed` | Immediately on every press | `entity_id` |
 | `switch_control_double_press` | When a second press is detected within 0.4 s | `entity_id` |
 | `switch_control_long_press` | After 0.5 s of holding | `entity_id` |
+| `switch_control_hold` | Repeatedly every 0.5 s while the button remains held after the long-press threshold | `entity_id` |
 | `switch_control_long_press_released` | When the button is released after a long press | `entity_id` |
+
+The `switch_control_long_press` event fires **once** when the threshold is first reached and applies the configured long press action. The `switch_control_hold` event then fires **repeatedly every 0.5 s** for as long as the button is held, making it ideal for continuous actions such as dimming. `switch_control_long_press_released` fires when the button is finally released.
 
 #### Configurable double press action
 
@@ -87,7 +90,7 @@ The **Double press action** setting (configured per switch input) lets you choos
 | **None (fire event only)** | No direct output action — only the `switch_control_double_press` event is fired. Use this when you want to handle the double press entirely through automations. |
 | **Turn on** | Turns all configured outputs **on** when a double press is detected. |
 | **Turn off** | Turns all configured outputs **off** when a double press is detected. |
-| **Toggle** | Toggles all configured outputs when a double press is detected. |
+| **Toggle** | Toggles all configured outputs once from their state before the first press when a double press is detected. |
 
 #### Configurable long press action
 
@@ -98,7 +101,7 @@ The **Long press action** setting (configured per switch input) lets you choose 
 | **None (fire event only)** | No direct output action — only the events above are fired. Use this when you want to handle the long press entirely through automations. |
 | **Turn on** | Turns all configured outputs **on** when the long press threshold is reached. |
 | **Turn off** | Turns all configured outputs **off** when the long press threshold is reached. |
-| **Toggle** | Toggles all configured outputs when the long press threshold is reached. |
+| **Toggle** | Toggles all configured outputs once from their state before the first press when the long press threshold is reached. |
 
 Events are always fired regardless of the action settings, so you can combine a built-in action with automation logic if needed.
 
@@ -109,7 +112,7 @@ automation:
   - alias: "Dim while holding"
     trigger:
       - platform: event
-        event_type: switch_control_long_press
+        event_type: switch_control_hold
         event_data:
           entity_id: switch.ceiling_light
     action:

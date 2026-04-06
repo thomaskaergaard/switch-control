@@ -45,8 +45,12 @@ DOUBLE_PRESS_ACTION_OPTIONS = [
     DOUBLE_PRESS_ACTION_TOGGLE,
 ]
 
+# Interval in seconds at which the hold event is fired while the button is held
+HOLD_REPEAT_INTERVAL = 0.5
+
 # Home Assistant event names fired by this integration
 EVENT_BUTTON_PRESSED = f"{DOMAIN}_button_pressed"
 EVENT_DOUBLE_PRESS = f"{DOMAIN}_double_press"
 EVENT_LONG_PRESS = f"{DOMAIN}_long_press"
 EVENT_LONG_PRESS_RELEASED = f"{DOMAIN}_long_press_released"
+EVENT_HOLD = f"{DOMAIN}_hold"

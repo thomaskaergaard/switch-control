@@ -29,8 +29,10 @@ from .const import (
     DOUBLE_PRESS_THRESHOLD,
     EVENT_BUTTON_PRESSED,
     EVENT_DOUBLE_PRESS,
+    EVENT_HOLD,
     EVENT_LONG_PRESS,
     EVENT_LONG_PRESS_RELEASED,
+    HOLD_REPEAT_INTERVAL,
     LONG_PRESS_ACTION_NONE,
     LONG_PRESS_ACTION_TOGGLE,
     LONG_PRESS_ACTION_TURN_OFF,
@@ -114,6 +116,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._long_press_fired: bool = False
         self._press_count: int = 0
         self._double_press_window_task: asyncio.Task | None = None
+        self._pre_press_state: bool = False
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -158,6 +161,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             if self._press_count == 1:
                 # First press: toggle the output state immediately
                 self._long_press_fired = False
+                self._pre_press_state = self._attr_is_on
                 self._attr_is_on = not self._attr_is_on
                 self.async_write_ha_state()
                 self.hass.async_create_task(self._apply_outputs(self._attr_is_on))
@@ -244,7 +248,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             pass
 
     async def _detect_long_press(self) -> None:
-        """Wait for the long-press threshold and fire the long-press event."""
+        """Wait for the long-press threshold, fire the long-press event, then hold."""
         try:
             await asyncio.sleep(LONG_PRESS_THRESHOLD)
         except asyncio.CancelledError:
@@ -264,9 +268,23 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             await self._apply_outputs(False)
             self.async_write_ha_state()
         elif self._long_press_action == LONG_PRESS_ACTION_TOGGLE:
-            self._attr_is_on = not self._attr_is_on
-            await self._apply_outputs(self._attr_is_on)
-            self.async_write_ha_state()
+            # Toggle from the state that was active before the first press so that
+            # the initial press-toggle and the long-press toggle don't cancel each out.
+            target = not self._pre_press_state
+            if self._attr_is_on != target:
+                self._attr_is_on = target
+                await self._apply_outputs(target)
+                self.async_write_ha_state()
+
+        # Continue firing hold events at regular intervals while the button remains
+        # pressed.  The task is cancelled when the sensor turns off, which causes
+        # the loop to exit via CancelledError.
+        while True:
+            self.hass.bus.async_fire(
+                EVENT_HOLD,
+                {"entity_id": self.entity_id},
+            )
+            await asyncio.sleep(HOLD_REPEAT_INTERVAL)
 
     async def _apply_double_press_action(self) -> None:
         """Apply the configured double-press action to all output entities."""
@@ -279,9 +297,13 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             await self._apply_outputs(False)
             self.async_write_ha_state()
         elif self._double_press_action == DOUBLE_PRESS_ACTION_TOGGLE:
-            self._attr_is_on = not self._attr_is_on
-            await self._apply_outputs(self._attr_is_on)
-            self.async_write_ha_state()
+            # Toggle from the state that was active before the first press so that
+            # the initial press-toggle and the double-press toggle don't cancel each other out.
+            target = not self._pre_press_state
+            if self._attr_is_on != target:
+                self._attr_is_on = target
+                await self._apply_outputs(target)
+                self.async_write_ha_state()
 
     async def _apply_outputs(self, turn_on: bool) -> None:
         """Turn all output entities on or off."""
