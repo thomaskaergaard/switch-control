@@ -90,9 +90,6 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
             ):
                 errors[CONF_SENSOR_ENTITY_ID] = "sensor_not_found"
 
-            if not output_entity_ids:
-                errors[CONF_OUTPUT_ENTITY_IDS] = "no_outputs"
-
             if not errors:
                 self._data[CONF_SWITCHES].append(
                     {
@@ -118,7 +115,7 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_SENSOR_ENTITY_ID): EntitySelector(
                     EntitySelectorConfig(domain=[BINARY_SENSOR_DOMAIN, SENSOR_DOMAIN])
                 ),
-                vol.Required(CONF_OUTPUT_ENTITY_IDS): EntitySelector(
+                vol.Optional(CONF_OUTPUT_ENTITY_IDS, default=[]): EntitySelector(
                     EntitySelectorConfig(
                         domain=["switch", "light"],
                         multiple=True,
