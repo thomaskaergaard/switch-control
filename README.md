@@ -39,6 +39,7 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
    - **Name** – a friendly name for this individual switch (e.g. `Ceiling Light`).
    - **Sensor (input)** – the sensor entity whose state drives the outputs.
    - **Outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control.
+   - **Long press action** – what the integration should do with the outputs when the button is held for 0.5 s or longer (see [Long press / hold](#long-press--hold) below).
 5. Click **Submit** on each step.
 
 One virtual switch entity is created for every configured input (e.g. `switch.ceiling_light`, `switch.floor_lamp`). Each entity's state mirrors its own sensor and controls its own set of outputs simultaneously.
@@ -56,13 +57,26 @@ A momentary press fires the sensor briefly (`on` → `off`). Instead of mirrorin
 
 ### Long press / hold
 
-When the sensor stays `on` for **0.5 seconds or longer**, the integration fires the following [Home Assistant events](https://www.home-assistant.io/docs/configuration/events/) on the event bus:
+When the sensor stays `on` for **0.5 seconds or longer**, the integration fires the following [Home Assistant events](https://www.home-assistant.io/docs/configuration/events/) on the event bus and optionally performs a built-in action on the configured output entities:
 
 | Event | When fired | Event data |
 |---|---|---|
 | `switch_control_button_pressed` | Immediately on every press | `entity_id` |
 | `switch_control_long_press` | After 0.5 s of holding | `entity_id` |
 | `switch_control_long_press_released` | When the button is released after a long press | `entity_id` |
+
+#### Configurable long press action
+
+The **Long press action** setting (configured per switch input) lets you choose what the integration does with the output entities when a long press is detected:
+
+| Option | Behaviour |
+|---|---|
+| **None (fire event only)** | No direct output action — only the events above are fired. Use this when you want to handle the long press entirely through automations. |
+| **Turn on** | Turns all configured outputs **on** when the long press threshold is reached. |
+| **Turn off** | Turns all configured outputs **off** when the long press threshold is reached. |
+| **Toggle** | Toggles all configured outputs when the long press threshold is reached. |
+
+Events are always fired regardless of the long press action setting, so you can combine a built-in action with automation logic if needed.
 
 You can listen for these events in automations to implement advanced behaviours such as dimming a light while the button is held:
 

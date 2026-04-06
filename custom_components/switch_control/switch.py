@@ -14,6 +14,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.const import STATE_ON, STATE_OFF
 
 from .const import (
+    CONF_LONG_PRESS_ACTION,
     CONF_NAME,
     CONF_OUTPUT_ENTITY_IDS,
     CONF_SENSOR_ENTITY_ID,
@@ -22,6 +23,10 @@ from .const import (
     EVENT_BUTTON_PRESSED,
     EVENT_LONG_PRESS,
     EVENT_LONG_PRESS_RELEASED,
+    LONG_PRESS_ACTION_NONE,
+    LONG_PRESS_ACTION_TOGGLE,
+    LONG_PRESS_ACTION_TURN_OFF,
+    LONG_PRESS_ACTION_TURN_ON,
     LONG_PRESS_THRESHOLD,
 )
 
@@ -47,6 +52,9 @@ async def async_setup_entry(
                     sensor_entity_id=switch_cfg[CONF_SENSOR_ENTITY_ID],
                     output_entity_ids=switch_cfg[CONF_OUTPUT_ENTITY_IDS],
                     unique_id=f"{entry.entry_id}_switch_{i + 1}",
+                    long_press_action=switch_cfg.get(
+                        CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE
+                    ),
                 )
             )
     else:
@@ -58,6 +66,7 @@ async def async_setup_entry(
                 sensor_entity_id=data[CONF_SENSOR_ENTITY_ID],
                 output_entity_ids=data[CONF_OUTPUT_ENTITY_IDS],
                 unique_id=entry.entry_id,
+                long_press_action=data.get(CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE),
             )
         )
 
@@ -77,6 +86,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         sensor_entity_id: str,
         output_entity_ids: list[str],
         unique_id: str,
+        long_press_action: str = LONG_PRESS_ACTION_NONE,
     ) -> None:
         """Initialize the Switch Control entity."""
         self._entry = entry
@@ -84,6 +94,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._attr_unique_id = unique_id
         self._sensor_entity_id = sensor_entity_id
         self._output_entity_ids = output_entity_ids
+        self._long_press_action = long_press_action
         self._attr_is_on = False
         self._long_press_task: asyncio.Task | None = None
         self._long_press_fired: bool = False
@@ -167,6 +178,19 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             {"entity_id": self.entity_id},
         )
 
+        if self._long_press_action == LONG_PRESS_ACTION_TURN_ON:
+            self._attr_is_on = True
+            await self._apply_outputs(True)
+            self.async_write_ha_state()
+        elif self._long_press_action == LONG_PRESS_ACTION_TURN_OFF:
+            self._attr_is_on = False
+            await self._apply_outputs(False)
+            self.async_write_ha_state()
+        elif self._long_press_action == LONG_PRESS_ACTION_TOGGLE:
+            self._attr_is_on = not self._attr_is_on
+            await self._apply_outputs(self._attr_is_on)
+            self.async_write_ha_state()
+
     async def _apply_outputs(self, turn_on: bool) -> None:
         """Turn all output entities on or off."""
         for entity_id in self._output_entity_ids:
@@ -197,4 +221,5 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         return {
             "sensor_entity_id": self._sensor_entity_id,
             "output_entity_ids": self._output_entity_ids,
+            "long_press_action": self._long_press_action,
         }

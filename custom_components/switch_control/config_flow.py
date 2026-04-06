@@ -19,6 +19,7 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    CONF_LONG_PRESS_ACTION,
     CONF_NAME,
     CONF_OUTPUT_ENTITY_IDS,
     CONF_SENSOR_ENTITY_ID,
@@ -26,6 +27,8 @@ from .const import (
     CONF_SWITCHES,
     DEFAULT_NAME,
     DOMAIN,
+    LONG_PRESS_ACTION_NONE,
+    LONG_PRESS_ACTION_OPTIONS,
     SWITCH_COUNT_OPTIONS,
 )
 
@@ -96,6 +99,9 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_NAME: user_input[CONF_NAME],
                         CONF_SENSOR_ENTITY_ID: sensor_entity_id,
                         CONF_OUTPUT_ENTITY_IDS: output_entity_ids,
+                        CONF_LONG_PRESS_ACTION: user_input.get(
+                            CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE
+                        ),
                     }
                 )
                 self._current_switch += 1
@@ -119,6 +125,15 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                     EntitySelectorConfig(
                         domain=["switch", "light"],
                         multiple=True,
+                    )
+                ),
+                vol.Optional(
+                    CONF_LONG_PRESS_ACTION, default=LONG_PRESS_ACTION_NONE
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=LONG_PRESS_ACTION_OPTIONS,
+                        mode=SelectSelectorMode.LIST,
+                        translation_key=CONF_LONG_PRESS_ACTION,
                     )
                 ),
             }
