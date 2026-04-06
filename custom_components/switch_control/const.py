@@ -12,3 +12,11 @@ DEFAULT_NAME = "Switch Control"
 SWITCH_COUNT_OPTIONS = ["2", "4"]
 
 PLATFORMS = ["switch"]
+
+# Long press detection threshold in seconds
+LONG_PRESS_THRESHOLD = 0.5
+
+# Home Assistant event names fired by this integration
+EVENT_BUTTON_PRESSED = f"{DOMAIN}_button_pressed"
+EVENT_LONG_PRESS = f"{DOMAIN}_long_press"
+EVENT_LONG_PRESS_RELEASED = f"{DOMAIN}_long_press_released"

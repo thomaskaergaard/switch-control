@@ -8,6 +8,8 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
 
 - Support for **2 or 4 independent switch inputs** per integration entry — ideal for 2-gang or 4-gang wall panels.
 - Each switch input monitors its own sensor entity and controls its own set of output entities.
+- **Toggle on press** — a momentary press (sensor briefly on then off) toggles the output state. The first press turns outputs on; the next press turns them off.
+- **Long press detection** — holding the input for 0.5 s or longer fires Home Assistant bus events that you can trigger automations from (e.g. dimming a light).
 - The controller exposes one virtual switch entity per input, so you can also toggle each one manually from the UI or automations.
 - Fully configurable through the Home Assistant UI (no YAML required).
 
@@ -43,10 +45,42 @@ One virtual switch entity is created for every configured input (e.g. `switch.ce
 
 ## How It Works
 
-| Sensor state | Virtual switch | Output entities |
+### Short press (toggle)
+
+A momentary press fires the sensor briefly (`on` → `off`). Instead of mirroring the sensor state (which would cause outputs to flicker), the integration **toggles** the output on every press:
+
+| Press | Virtual switch (before) | Virtual switch (after) | Output entities |
+|---|---|---|---|
+| 1st press | `off` | `on` | all turned **on** |
+| 2nd press | `on` | `off` | all turned **off** |
+
+### Long press / hold
+
+When the sensor stays `on` for **0.5 seconds or longer**, the integration fires the following [Home Assistant events](https://www.home-assistant.io/docs/configuration/events/) on the event bus:
+
+| Event | When fired | Event data |
 |---|---|---|
-| `on`  | `on`  | all turned **on**  |
-| `off` | `off` | all turned **off** |
+| `switch_control_button_pressed` | Immediately on every press | `entity_id` |
+| `switch_control_long_press` | After 0.5 s of holding | `entity_id` |
+| `switch_control_long_press_released` | When the button is released after a long press | `entity_id` |
+
+You can listen for these events in automations to implement advanced behaviours such as dimming a light while the button is held:
+
+```yaml
+automation:
+  - alias: "Dim while holding"
+    trigger:
+      - platform: event
+        event_type: switch_control_long_press
+        event_data:
+          entity_id: switch.ceiling_light
+    action:
+      - service: light.turn_on
+        target:
+          entity_id: light.ceiling
+        data:
+          brightness_step_pct: -10
+```
 
 Each virtual switch can also be toggled manually, independently of the sensor, allowing full manual override per channel.
 

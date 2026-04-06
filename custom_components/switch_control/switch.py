@@ -1,6 +1,7 @@
 """Switch platform for the Switch Control integration."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -9,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.const import STATE_ON, STATE_OFF
 
 from .const import (
@@ -17,6 +19,10 @@ from .const import (
     CONF_SENSOR_ENTITY_ID,
     CONF_SWITCHES,
     DOMAIN,
+    EVENT_BUTTON_PRESSED,
+    EVENT_LONG_PRESS,
+    EVENT_LONG_PRESS_RELEASED,
+    LONG_PRESS_THRESHOLD,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,7 +64,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class SwitchControlEntity(SwitchEntity):
+class SwitchControlEntity(SwitchEntity, RestoreEntity):
     """Represents a switch controller that monitors a sensor and controls outputs."""
 
     _attr_has_entity_name = True
@@ -79,9 +85,16 @@ class SwitchControlEntity(SwitchEntity):
         self._sensor_entity_id = sensor_entity_id
         self._output_entity_ids = output_entity_ids
         self._attr_is_on = False
+        self._long_press_task: asyncio.Task | None = None
+        self._long_press_fired: bool = False
 
     async def async_added_to_hass(self) -> None:
         """Register callbacks when entity is added."""
+        # Restore the previous switch state so toggle works correctly after restart
+        last_state = await self.async_get_last_state()
+        if last_state is not None:
+            self._attr_is_on = last_state.state == STATE_ON
+
         # Track the sensor state changes
         self.async_on_remove(
             async_track_state_change_event(
@@ -91,11 +104,7 @@ class SwitchControlEntity(SwitchEntity):
             )
         )
 
-        # Sync state with current sensor state
-        sensor_state = self.hass.states.get(self._sensor_entity_id)
-        if sensor_state is not None:
-            self._attr_is_on = sensor_state.state == STATE_ON
-            self.async_write_ha_state()
+        self.async_write_ha_state()
 
     @callback
     def _handle_sensor_state_change(self, event: Any) -> None:
@@ -105,10 +114,58 @@ class SwitchControlEntity(SwitchEntity):
             return
 
         is_on = new_state.state == STATE_ON
-        self._attr_is_on = is_on
-        self.async_write_ha_state()
 
-        self.hass.async_create_task(self._apply_outputs(is_on))
+        if is_on:
+            # Button pressed: toggle the output state immediately
+            self._long_press_fired = False
+            self._attr_is_on = not self._attr_is_on
+            self.async_write_ha_state()
+            self.hass.async_create_task(self._apply_outputs(self._attr_is_on))
+
+            # Notify listeners that the button was pressed
+            self.hass.bus.async_fire(
+                EVENT_BUTTON_PRESSED,
+                {"entity_id": self.entity_id},
+            )
+
+            # Start long-press detection
+            self._long_press_task = self.hass.async_create_task(
+                self._detect_long_press()
+            )
+        else:
+            # Button released: cancel any pending long-press timer
+            if self._long_press_task is not None and not self._long_press_task.done():
+                self._long_press_task.cancel()
+                # Schedule awaiting the cancellation so cleanup completes properly
+                self.hass.async_create_task(self._await_cancel(self._long_press_task))
+            self._long_press_task = None
+
+            # If a long press was active, fire the release event
+            if self._long_press_fired:
+                self.hass.bus.async_fire(
+                    EVENT_LONG_PRESS_RELEASED,
+                    {"entity_id": self.entity_id},
+                )
+                self._long_press_fired = False
+
+    async def _await_cancel(self, task: asyncio.Task) -> None:
+        """Await a cancelled task, suppressing the CancelledError."""
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    async def _detect_long_press(self) -> None:
+        """Wait for the long-press threshold and fire the long-press event."""
+        try:
+            await asyncio.sleep(LONG_PRESS_THRESHOLD)
+        except asyncio.CancelledError:
+            raise
+        self._long_press_fired = True
+        self.hass.bus.async_fire(
+            EVENT_LONG_PRESS,
+            {"entity_id": self.entity_id},
+        )
 
     async def _apply_outputs(self, turn_on: bool) -> None:
         """Turn all output entities on or off."""
