@@ -201,19 +201,20 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                     self.hass.async_create_task(self._await_cancel(self._long_press_task))
                 self._long_press_task = None
 
-                # Toggle on second press (mirrors physical switch behaviour).
-                self._attr_is_on = not self._attr_is_on
-                self.async_write_ha_state()
-                self.hass.async_create_task(self._apply_outputs(self._attr_is_on))
-
                 # Fire the double-press event.
                 self.hass.bus.async_fire(
                     EVENT_DOUBLE_PRESS,
                     {"entity_id": self.entity_id},
                 )
 
-                # Apply optional double-press action.
-                self.hass.async_create_task(self._apply_double_press_action())
+                if self._double_press_action == DOUBLE_PRESS_ACTION_NONE:
+                    # No specific action: treat the second press as a normal toggle.
+                    self._attr_is_on = not self._attr_is_on
+                    self.async_write_ha_state()
+                    self.hass.async_create_task(self._apply_outputs(self._attr_is_on))
+                else:
+                    # Apply the configured action directly, overriding the second press.
+                    self.hass.async_create_task(self._apply_double_press_action())
         else:
             # Button released: cancel any pending long-press timer
             if self._long_press_task is not None and not self._long_press_task.done():
