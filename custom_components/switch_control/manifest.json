@@ -1,13 +1,15 @@
 {
   "domain": "switch_control",
   "name": "Switch Control",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Control switches, lamps, and outlets based on a sensor input",
   "documentation": "https://github.com/thomaskaergaard/switch-control",
   "issue_tracker": "https://github.com/thomaskaergaard/switch-control/issues",
   "requirements": [],
   "dependencies": [],
-  "codeowners": ["@thomaskaergaard"],
+  "codeowners": [
+    "@thomaskaergaard"
+  ],
   "iot_class": "local_push",
   "config_flow": true
 }
