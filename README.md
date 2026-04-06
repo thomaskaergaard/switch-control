@@ -102,6 +102,8 @@ The **Long press action** setting (configured per switch input) lets you choose 
 | **Turn on** | Turns all configured outputs **on** when the long press threshold is reached. |
 | **Turn off** | Turns all configured outputs **off** when the long press threshold is reached. |
 | **Toggle** | Toggles all configured outputs once from their state before the first press when the long press threshold is reached. |
+| **Dim up** | Repeatedly increases the brightness of all configured `light` entities by 10 % every 0.3 s while the button is held. Stops when the button is released. |
+| **Dim down** | Repeatedly decreases the brightness of all configured `light` entities by 10 % every 0.3 s while the button is held. Stops when the button is released. |
 
 Events are always fired regardless of the action settings, so you can combine a built-in action with automation logic if needed.
 

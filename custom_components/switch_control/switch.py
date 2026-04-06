@@ -21,6 +21,8 @@ from .const import (
     CONF_OUTPUT_ENTITY_IDS,
     CONF_SENSOR_ENTITY_ID,
     CONF_SWITCHES,
+    DIM_INTERVAL,
+    DIM_STEP_PCT,
     DOMAIN,
     DOUBLE_PRESS_ACTION_NONE,
     DOUBLE_PRESS_ACTION_TOGGLE,
@@ -33,6 +35,8 @@ from .const import (
     EVENT_LONG_PRESS,
     EVENT_LONG_PRESS_RELEASED,
     HOLD_REPEAT_INTERVAL,
+    LONG_PRESS_ACTION_DIM_DOWN,
+    LONG_PRESS_ACTION_DIM_UP,
     LONG_PRESS_ACTION_NONE,
     LONG_PRESS_ACTION_TOGGLE,
     LONG_PRESS_ACTION_TURN_OFF,
@@ -114,6 +118,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._attr_is_on = False
         self._long_press_task: asyncio.Task | None = None
         self._long_press_fired: bool = False
+        self._dim_task: asyncio.Task | None = None
         self._press_count: int = 0
         self._double_press_window_task: asyncio.Task | None = None
         self._pre_press_state: bool = False
@@ -227,6 +232,12 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                 self.hass.async_create_task(self._await_cancel(self._long_press_task))
             self._long_press_task = None
 
+            # Cancel any active dim loop
+            if self._dim_task is not None and not self._dim_task.done():
+                self._dim_task.cancel()
+                self.hass.async_create_task(self._await_cancel(self._dim_task))
+            self._dim_task = None
+
             # If a long press was active, fire the release event
             if self._long_press_fired:
                 self.hass.bus.async_fire(
@@ -275,6 +286,8 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                 self._attr_is_on = target
                 await self._apply_outputs(target)
                 self.async_write_ha_state()
+        elif self._long_press_action in (LONG_PRESS_ACTION_DIM_UP, LONG_PRESS_ACTION_DIM_DOWN):
+            self._dim_task = self.hass.async_create_task(self._apply_dim_loop())
 
         # Continue firing hold events at regular intervals while the button remains
         # pressed.  The task is cancelled when the sensor turns off, which causes
@@ -285,6 +298,24 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                 {"entity_id": self.entity_id},
             )
             await asyncio.sleep(HOLD_REPEAT_INTERVAL)
+
+    async def _apply_dim_loop(self) -> None:
+        """Repeatedly step brightness up or down while the button is held."""
+        step = (
+            DIM_STEP_PCT
+            if self._long_press_action == LONG_PRESS_ACTION_DIM_UP
+            else -DIM_STEP_PCT
+        )
+        while True:
+            for entity_id in self._output_entity_ids:
+                if entity_id.split(".")[0] == "light":
+                    await self.hass.services.async_call(
+                        "light",
+                        "turn_on",
+                        {"entity_id": entity_id, "brightness_step_pct": step},
+                        blocking=False,
+                    )
+            await asyncio.sleep(DIM_INTERVAL)
 
     async def _apply_double_press_action(self) -> None:
         """Apply the configured double-press action to all output entities."""
