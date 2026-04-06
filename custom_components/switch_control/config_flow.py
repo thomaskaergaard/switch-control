@@ -5,6 +5,7 @@ from typing import Any
 
 import voluptuous as vol
 
+from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers import entity_registry as er
@@ -115,7 +116,7 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(CONF_NAME, default=default_switch_name): TextSelector(),
                 vol.Required(CONF_SENSOR_ENTITY_ID): EntitySelector(
-                    EntitySelectorConfig(domain=SENSOR_DOMAIN)
+                    EntitySelectorConfig(domain=[BINARY_SENSOR_DOMAIN, SENSOR_DOMAIN])
                 ),
                 vol.Required(CONF_OUTPUT_ENTITY_IDS): EntitySelector(
                     EntitySelectorConfig(
