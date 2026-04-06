@@ -26,12 +26,20 @@ LONG_PRESS_ACTION_NONE = "none"
 LONG_PRESS_ACTION_TURN_ON = "turn_on"
 LONG_PRESS_ACTION_TURN_OFF = "turn_off"
 LONG_PRESS_ACTION_TOGGLE = "toggle"
+LONG_PRESS_ACTION_DIM_UP = "dim_up"
+LONG_PRESS_ACTION_DIM_DOWN = "dim_down"
 LONG_PRESS_ACTION_OPTIONS = [
     LONG_PRESS_ACTION_NONE,
     LONG_PRESS_ACTION_TURN_ON,
     LONG_PRESS_ACTION_TURN_OFF,
     LONG_PRESS_ACTION_TOGGLE,
+    LONG_PRESS_ACTION_DIM_UP,
+    LONG_PRESS_ACTION_DIM_DOWN,
 ]
+
+# Dimming settings for dim_up / dim_down long press actions
+DIM_STEP_PCT = 10  # brightness change per step in percent
+DIM_INTERVAL = 0.3  # seconds between each brightness step
 
 # Double press action options (same set as long press)
 DOUBLE_PRESS_ACTION_NONE = "none"
