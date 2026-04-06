@@ -18,11 +18,13 @@
         "data": {
           "name": "Name",
           "sensor_entity_id": "Sensor (input)",
-          "output_entity_ids": "Outputs (lamps and outlets)"
+          "output_entity_ids": "Outputs (lamps and outlets)",
+          "long_press_action": "Long press action"
         },
         "data_description": {
           "sensor_entity_id": "The sensor whose state (on/off) will control the outputs.",
-          "output_entity_ids": "The switch or light entities to control."
+          "output_entity_ids": "The switch or light entities to control.",
+          "long_press_action": "What to do with the outputs when the button is held for 0.5 s or longer. Events are always fired regardless of this setting."
         }
       }
     },
@@ -31,6 +33,16 @@
     },
     "abort": {
       "already_configured": "This Switch Control is already configured."
+    }
+  },
+  "selector": {
+    "long_press_action": {
+      "options": {
+        "none": "None (fire event only)",
+        "turn_on": "Turn on",
+        "turn_off": "Turn off",
+        "toggle": "Toggle"
+      }
     }
   }
 }
