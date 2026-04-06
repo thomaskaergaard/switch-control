@@ -74,7 +74,9 @@
         "none": "None (fire event only)",
         "turn_on": "Turn on",
         "turn_off": "Turn off",
-        "toggle": "Toggle"
+        "toggle": "Toggle",
+        "dim_up": "Dim up (increase brightness while held)",
+        "dim_down": "Dim down (decrease brightness while held)"
       }
     },
     "double_press_action": {
