@@ -115,6 +115,15 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                 sensor_entity_id
             ):
                 errors[CONF_SENSOR_ENTITY_ID] = "sensor_not_found"
+            else:
+                used_sensor_ids: set[str] = set()
+                for entry in self.hass.config_entries.async_entries(DOMAIN):
+                    for sw in entry.data.get(CONF_SWITCHES, []):
+                        used_sensor_ids.add(sw[CONF_SENSOR_ENTITY_ID])
+                for sw in self._data.get(CONF_SWITCHES, []):
+                    used_sensor_ids.add(sw[CONF_SENSOR_ENTITY_ID])
+                if sensor_entity_id in used_sensor_ids:
+                    errors[CONF_SENSOR_ENTITY_ID] = "sensor_already_in_use"
 
             if not errors:
                 self._data[CONF_SWITCHES].append(
@@ -280,6 +289,18 @@ class SwitchControlOptionsFlow(OptionsFlow):
                 sensor_entity_id
             ):
                 errors[CONF_SENSOR_ENTITY_ID] = "sensor_not_found"
+            else:
+                used_sensor_ids: set[str] = set()
+                for entry in self.hass.config_entries.async_entries(DOMAIN):
+                    for i, sw in enumerate(entry.data.get(CONF_SWITCHES, [])):
+                        if (
+                            entry.entry_id == self.config_entry.entry_id
+                            and i == self._current_switch_index
+                        ):
+                            continue
+                        used_sensor_ids.add(sw[CONF_SENSOR_ENTITY_ID])
+                if sensor_entity_id in used_sensor_ids:
+                    errors[CONF_SENSOR_ENTITY_ID] = "sensor_already_in_use"
 
             if not errors:
                 switches[self._current_switch_index] = {
