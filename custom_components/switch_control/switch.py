@@ -32,6 +32,7 @@ from .const import (
     DOUBLE_PRESS_ACTION_TURN_ON,
     DOUBLE_PRESS_THRESHOLD,
     EVENT_BUTTON_PRESSED,
+    EVENT_BUTTON_RELEASED,
     EVENT_DOUBLE_PRESS,
     EVENT_HOLD,
     EVENT_LONG_PRESS,
@@ -331,6 +332,12 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                     {"entity_id": self.entity_id},
                 )
                 self._long_press_fired = False
+
+            # Always fire a button released event so automations can react to any release
+            self.hass.bus.async_fire(
+                EVENT_BUTTON_RELEASED,
+                {"entity_id": self.entity_id},
+            )
 
     async def _reset_press_count(self) -> None:
         """Reset the press counter after the double-press detection window expires."""
