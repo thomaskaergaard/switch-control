@@ -23,7 +23,12 @@
           "long_press_output_entity_ids": "Long press outputs (lamps and outlets)",
           "dim_auto_threshold": "Dim auto threshold",
           "double_press_action": "Double press action",
-          "double_press_output_entity_ids": "Double press outputs (lamps and outlets)"
+          "double_press_output_entity_ids": "Double press outputs (lamps and outlets)",
+          "press_actions": "Press actions",
+          "released_actions": "Released actions",
+          "double_press_actions": "Double press actions",
+          "long_press_actions": "Long press actions",
+          "long_press_released_actions": "Long press released actions"
         },
         "data_description": {
           "sensor_entity_id": "The sensor whose state (on/off) will control the outputs.",
@@ -32,7 +37,12 @@
           "long_press_output_entity_ids": "The switch or light entities to control on a long press or hold. Leave empty to use the press outputs.",
           "dim_auto_threshold": "When 'Dim auto' is selected, dim down if the current brightness is above this percentage, otherwise dim up.",
           "double_press_action": "What to do with the outputs when the button is pressed twice within 0.4 s. Events are always fired regardless of this setting.",
-          "double_press_output_entity_ids": "The switch or light entities to control on a double press. Leave empty to use the press outputs."
+          "double_press_output_entity_ids": "The switch or light entities to control on a double press. Leave empty to use the press outputs.",
+          "press_actions": "Automation actions to run each time the button is pressed (fires with the switch_control_button_pressed event).",
+          "released_actions": "Automation actions to run each time the button is released (fires with the switch_control_button_released event).",
+          "double_press_actions": "Automation actions to run when a double press is detected (fires with the switch_control_double_press event).",
+          "long_press_actions": "Automation actions to run when a long press is detected after 0.5 s (fires with the switch_control_long_press event).",
+          "long_press_released_actions": "Automation actions to run when the button is released after a long press (fires with the switch_control_long_press_released event)."
         }
       }
     },
@@ -63,7 +73,12 @@
           "long_press_output_entity_ids": "Long press outputs (lamps and outlets)",
           "dim_auto_threshold": "Dim auto threshold",
           "double_press_action": "Double press action",
-          "double_press_output_entity_ids": "Double press outputs (lamps and outlets)"
+          "double_press_output_entity_ids": "Double press outputs (lamps and outlets)",
+          "press_actions": "Press actions",
+          "released_actions": "Released actions",
+          "double_press_actions": "Double press actions",
+          "long_press_actions": "Long press actions",
+          "long_press_released_actions": "Long press released actions"
         },
         "data_description": {
           "sensor_entity_id": "The sensor whose state (on/off) will control the outputs.",
@@ -72,7 +87,12 @@
           "long_press_output_entity_ids": "The switch or light entities to control on a long press or hold. Leave empty to use the press outputs.",
           "dim_auto_threshold": "When 'Dim auto' is selected, dim down if the current brightness is above this percentage, otherwise dim up.",
           "double_press_action": "What to do with the outputs when the button is pressed twice within 0.4 s. Events are always fired regardless of this setting.",
-          "double_press_output_entity_ids": "The switch or light entities to control on a double press. Leave empty to use the press outputs."
+          "double_press_output_entity_ids": "The switch or light entities to control on a double press. Leave empty to use the press outputs.",
+          "press_actions": "Automation actions to run each time the button is pressed (fires with the switch_control_button_pressed event).",
+          "released_actions": "Automation actions to run each time the button is released (fires with the switch_control_button_released event).",
+          "double_press_actions": "Automation actions to run when a double press is detected (fires with the switch_control_double_press event).",
+          "long_press_actions": "Automation actions to run when a long press is detected after 0.5 s (fires with the switch_control_long_press event).",
+          "long_press_released_actions": "Automation actions to run when the button is released after a long press (fires with the switch_control_long_press_released event)."
         }
       }
     },
