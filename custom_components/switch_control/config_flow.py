@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResu
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
+    ActionSelector,
     EntitySelector,
     EntitySelectorConfig,
     NumberSelector,
@@ -25,11 +26,16 @@ from homeassistant.helpers.selector import (
 from .const import (
     CONF_DIM_AUTO_THRESHOLD,
     CONF_DOUBLE_PRESS_ACTION,
+    CONF_DOUBLE_PRESS_ACTIONS,
     CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS,
     CONF_LONG_PRESS_ACTION,
+    CONF_LONG_PRESS_ACTIONS,
     CONF_LONG_PRESS_OUTPUT_ENTITY_IDS,
+    CONF_LONG_PRESS_RELEASED_ACTIONS,
     CONF_NAME,
     CONF_OUTPUT_ENTITY_IDS,
+    CONF_PRESS_ACTIONS,
+    CONF_RELEASED_ACTIONS,
     CONF_SENSOR_ENTITY_ID,
     CONF_SWITCH_COUNT,
     CONF_SWITCHES,
@@ -131,6 +137,13 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS: user_input.get(
                             CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, []
                         ),
+                        CONF_PRESS_ACTIONS: user_input.get(CONF_PRESS_ACTIONS, []),
+                        CONF_RELEASED_ACTIONS: user_input.get(CONF_RELEASED_ACTIONS, []),
+                        CONF_DOUBLE_PRESS_ACTIONS: user_input.get(CONF_DOUBLE_PRESS_ACTIONS, []),
+                        CONF_LONG_PRESS_ACTIONS: user_input.get(CONF_LONG_PRESS_ACTIONS, []),
+                        CONF_LONG_PRESS_RELEASED_ACTIONS: user_input.get(
+                            CONF_LONG_PRESS_RELEASED_ACTIONS, []
+                        ),
                     }
                 )
                 self._current_switch += 1
@@ -197,6 +210,11 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                         multiple=True,
                     )
                 ),
+                vol.Optional(CONF_PRESS_ACTIONS, default=[]): ActionSelector(),
+                vol.Optional(CONF_RELEASED_ACTIONS, default=[]): ActionSelector(),
+                vol.Optional(CONF_DOUBLE_PRESS_ACTIONS, default=[]): ActionSelector(),
+                vol.Optional(CONF_LONG_PRESS_ACTIONS, default=[]): ActionSelector(),
+                vol.Optional(CONF_LONG_PRESS_RELEASED_ACTIONS, default=[]): ActionSelector(),
             }
         )
 
@@ -283,6 +301,13 @@ class SwitchControlOptionsFlow(OptionsFlow):
                     CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS: user_input.get(
                         CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, []
                     ),
+                    CONF_PRESS_ACTIONS: user_input.get(CONF_PRESS_ACTIONS, []),
+                    CONF_RELEASED_ACTIONS: user_input.get(CONF_RELEASED_ACTIONS, []),
+                    CONF_DOUBLE_PRESS_ACTIONS: user_input.get(CONF_DOUBLE_PRESS_ACTIONS, []),
+                    CONF_LONG_PRESS_ACTIONS: user_input.get(CONF_LONG_PRESS_ACTIONS, []),
+                    CONF_LONG_PRESS_RELEASED_ACTIONS: user_input.get(
+                        CONF_LONG_PRESS_RELEASED_ACTIONS, []
+                    ),
                 }
                 self.hass.config_entries.async_update_entry(
                     self.config_entry,
@@ -357,6 +382,26 @@ class SwitchControlOptionsFlow(OptionsFlow):
                         multiple=True,
                     )
                 ),
+                vol.Optional(
+                    CONF_PRESS_ACTIONS,
+                    default=current.get(CONF_PRESS_ACTIONS, []),
+                ): ActionSelector(),
+                vol.Optional(
+                    CONF_RELEASED_ACTIONS,
+                    default=current.get(CONF_RELEASED_ACTIONS, []),
+                ): ActionSelector(),
+                vol.Optional(
+                    CONF_DOUBLE_PRESS_ACTIONS,
+                    default=current.get(CONF_DOUBLE_PRESS_ACTIONS, []),
+                ): ActionSelector(),
+                vol.Optional(
+                    CONF_LONG_PRESS_ACTIONS,
+                    default=current.get(CONF_LONG_PRESS_ACTIONS, []),
+                ): ActionSelector(),
+                vol.Optional(
+                    CONF_LONG_PRESS_RELEASED_ACTIONS,
+                    default=current.get(CONF_LONG_PRESS_RELEASED_ACTIONS, []),
+                ): ActionSelector(),
             }
         )
 

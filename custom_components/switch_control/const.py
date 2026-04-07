@@ -13,6 +13,13 @@ CONF_LONG_PRESS_ACTION = "long_press_action"
 CONF_DOUBLE_PRESS_ACTION = "double_press_action"
 CONF_DIM_AUTO_THRESHOLD = "dim_auto_threshold"
 
+# Per-event automation action sequences (list of HA action dicts)
+CONF_PRESS_ACTIONS = "press_actions"
+CONF_RELEASED_ACTIONS = "released_actions"
+CONF_DOUBLE_PRESS_ACTIONS = "double_press_actions"
+CONF_LONG_PRESS_ACTIONS = "long_press_actions"
+CONF_LONG_PRESS_RELEASED_ACTIONS = "long_press_released_actions"
+
 DEFAULT_NAME = "Switch Control"
 SWITCH_COUNT_OPTIONS = ["1", "2", "4"]
 

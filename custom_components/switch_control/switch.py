@@ -12,16 +12,22 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.script import Script
 from homeassistant.const import STATE_ON, STATE_OFF
 
 from .const import (
     CONF_DIM_AUTO_THRESHOLD,
     CONF_DOUBLE_PRESS_ACTION,
+    CONF_DOUBLE_PRESS_ACTIONS,
     CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS,
     CONF_LONG_PRESS_ACTION,
+    CONF_LONG_PRESS_ACTIONS,
     CONF_LONG_PRESS_OUTPUT_ENTITY_IDS,
+    CONF_LONG_PRESS_RELEASED_ACTIONS,
     CONF_NAME,
     CONF_OUTPUT_ENTITY_IDS,
+    CONF_PRESS_ACTIONS,
+    CONF_RELEASED_ACTIONS,
     CONF_SENSOR_ENTITY_ID,
     CONF_SWITCHES,
     DIM_AUTO_THRESHOLD,
@@ -88,6 +94,13 @@ async def async_setup_entry(
                     dim_auto_threshold=switch_cfg.get(
                         CONF_DIM_AUTO_THRESHOLD, DIM_AUTO_THRESHOLD
                     ),
+                    press_actions=switch_cfg.get(CONF_PRESS_ACTIONS, []),
+                    released_actions=switch_cfg.get(CONF_RELEASED_ACTIONS, []),
+                    double_press_actions=switch_cfg.get(CONF_DOUBLE_PRESS_ACTIONS, []),
+                    long_press_actions=switch_cfg.get(CONF_LONG_PRESS_ACTIONS, []),
+                    long_press_released_actions=switch_cfg.get(
+                        CONF_LONG_PRESS_RELEASED_ACTIONS, []
+                    ),
                 )
             )
     else:
@@ -130,6 +143,11 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         double_press_action: str = DOUBLE_PRESS_ACTION_NONE,
         double_press_output_entity_ids: list[str] | None = None,
         dim_auto_threshold: int = DIM_AUTO_THRESHOLD,
+        press_actions: list[dict] | None = None,
+        released_actions: list[dict] | None = None,
+        double_press_actions: list[dict] | None = None,
+        long_press_actions: list[dict] | None = None,
+        long_press_released_actions: list[dict] | None = None,
     ) -> None:
         """Initialize the Switch Control entity."""
         self._entry = entry
@@ -143,6 +161,11 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._double_press_action = double_press_action
         self._double_press_output_entity_ids: list[str] = double_press_output_entity_ids or []
         self._dim_auto_threshold = dim_auto_threshold
+        self._press_actions: list[dict] = press_actions or []
+        self._released_actions: list[dict] = released_actions or []
+        self._double_press_actions: list[dict] = double_press_actions or []
+        self._long_press_actions: list[dict] = long_press_actions or []
+        self._long_press_released_actions: list[dict] = long_press_released_actions or []
         self._attr_is_on = False
         self._long_press_task: asyncio.Task | None = None
         self._long_press_fired: bool = False
@@ -232,6 +255,11 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._double_press_action = new_double
         self._double_press_output_entity_ids = new_double_outputs
         self._dim_auto_threshold = new_dim_auto_threshold
+        self._press_actions = sw.get(CONF_PRESS_ACTIONS, [])
+        self._released_actions = sw.get(CONF_RELEASED_ACTIONS, [])
+        self._double_press_actions = sw.get(CONF_DOUBLE_PRESS_ACTIONS, [])
+        self._long_press_actions = sw.get(CONF_LONG_PRESS_ACTIONS, [])
+        self._long_press_released_actions = sw.get(CONF_LONG_PRESS_RELEASED_ACTIONS, [])
         self._attr_name = new_name
         self.async_write_ha_state()
 
@@ -275,6 +303,12 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                     {"entity_id": self.entity_id},
                 )
 
+                # Run any configured press actions
+                if self._press_actions:
+                    self.hass.async_create_task(
+                        self._run_actions(self._press_actions, "press")
+                    )
+
                 # Start long-press detection
                 self._long_press_task = self.hass.async_create_task(
                     self._detect_long_press()
@@ -314,6 +348,12 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                     {"entity_id": self.entity_id},
                 )
 
+                # Run any configured double press actions
+                if self._double_press_actions:
+                    self.hass.async_create_task(
+                        self._run_actions(self._double_press_actions, "double press")
+                    )
+
                 if self._double_press_action == DOUBLE_PRESS_ACTION_NONE:
                     # No specific action: treat the second press as a normal toggle.
                     self._attr_is_on = not self._attr_is_on
@@ -342,6 +382,11 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                     EVENT_LONG_PRESS_RELEASED,
                     {"entity_id": self.entity_id},
                 )
+                # Run any configured long press released actions
+                if self._long_press_released_actions:
+                    self.hass.async_create_task(
+                        self._run_actions(self._long_press_released_actions, "long press released")
+                    )
                 self._long_press_fired = False
 
             # Always fire a button released event so automations can react to any release
@@ -350,10 +395,39 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                 {"entity_id": self.entity_id},
             )
 
+            # Run any configured released actions
+            if self._released_actions:
+                self.hass.async_create_task(
+                    self._run_actions(self._released_actions, "released")
+                )
+
     async def _reset_press_count(self) -> None:
         """Reset the press counter after the double-press detection window expires."""
         await asyncio.sleep(DOUBLE_PRESS_THRESHOLD)
         self._press_count = 0
+
+    async def _run_actions(self, actions: list[dict], label: str) -> None:
+        """Execute a sequence of Home Assistant automation actions.
+
+        Creates a transient Script instance, runs it once, then stops it.
+        Actions are defined using the standard Home Assistant action format
+        (the same syntax used in automation ``action:`` blocks).
+        Callers are responsible for only calling this when ``actions`` is non-empty.
+        """
+        script = Script(
+            self.hass,
+            actions,
+            f"{self._attr_name} {label}",
+            DOMAIN,
+        )
+        try:
+            await script.async_run()
+        except Exception:
+            _LOGGER.exception(
+                "Error running %s actions for %s", label, self.entity_id
+            )
+        finally:
+            await script.async_stop()
 
     async def _await_cancel(self, task: asyncio.Task) -> None:
         """Await a cancelled task, suppressing the CancelledError."""
@@ -380,6 +454,12 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             EVENT_LONG_PRESS,
             {"entity_id": self.entity_id},
         )
+
+        # Run any configured long press actions
+        if self._long_press_actions:
+            self.hass.async_create_task(
+                self._run_actions(self._long_press_actions, "long press")
+            )
 
         if self._long_press_action == LONG_PRESS_ACTION_TURN_ON:
             self._attr_is_on = True

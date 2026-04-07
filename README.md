@@ -46,6 +46,11 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
    - **Dim auto threshold** – brightness percentage (0–100, default 60) used by the **Dim auto** long press action to decide whether to dim up or down. When the current brightness is above this value the light dims down; otherwise it dims up.
    - **Double press action** – what the integration should do with the outputs when the button is pressed twice within 0.4 s (see [Double press](#double-press) below).
    - **Double press outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control on a double press. Leave empty to use the press outputs.
+   - **Press actions** – optional automation actions to run each time the button is pressed (see [Inline automation actions](#inline-automation-actions) below).
+   - **Released actions** – optional automation actions to run each time the button is released.
+   - **Double press actions** – optional automation actions to run when a double press is detected.
+   - **Long press actions** – optional automation actions to run when a long press is detected after 0.5 s.
+   - **Long press released actions** – optional automation actions to run when the button is released after a long press.
 5. Click **Submit** on each step.
 
 One virtual switch entity is created for every configured input (e.g. `switch.ceiling_light`, `switch.floor_lamp`). Each entity's state mirrors its own sensor and controls its own set of outputs simultaneously. All entities for the same panel are grouped under a single device.
@@ -145,6 +150,36 @@ automation:
         target:
           entity_id: scene.movie_mode
 ```
+
+### Inline automation actions
+
+Instead of (or in addition to) writing separate YAML automations, you can configure automation actions **directly in the config flow UI** for each switch input. Five action selectors are available, one per event:
+
+| Config field | Fires when |
+|---|---|
+| **Press actions** | Button is pressed (`switch_control_button_pressed`) |
+| **Released actions** | Button is released (`switch_control_button_released`) |
+| **Double press actions** | Double press detected (`switch_control_double_press`) |
+| **Long press actions** | Long press threshold reached (`switch_control_long_press`) |
+| **Long press released actions** | Button released after a long press (`switch_control_long_press_released`) |
+
+Each field accepts the standard Home Assistant **action** syntax — the same format used inside an `automation:` block's `action:` list. You can call services, activate scenes, run scripts, send notifications, and more, all without leaving the integration's configuration UI.
+
+Example: activate a scene on double press and send a notification on long press, configured entirely in the UI (no extra YAML needed):
+
+```yaml
+# Equivalent YAML of what the UI stores for "double press actions"
+- service: scene.turn_on
+  target:
+    entity_id: scene.movie_mode
+
+# Equivalent YAML of what the UI stores for "long press actions"
+- service: notify.mobile_app_my_phone
+  data:
+    message: "Long press detected on ceiling light"
+```
+
+Inline actions run **in addition to** any built-in action (e.g. a configured long press action that dims a light). Events are always fired regardless of these settings, so you can mix inline actions with traditional YAML automations freely.
 
 Each virtual switch can also be toggled manually, independently of the sensor, allowing full manual override per channel.
 
