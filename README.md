@@ -68,12 +68,12 @@ A momentary press fires the sensor briefly (`on` → `off`). Instead of mirrorin
 
 ### Double press
 
-When the sensor is triggered twice within **0.4 seconds**, the integration detects a double press:
+When the sensor is triggered a second time within **0.4 seconds of the first release**, the integration detects a double press:
 
 - The `switch_control_double_press` event is fired on the Home Assistant event bus.
 - The configurable **Double press action** is applied to the output entities.
 
-To avoid triggering a single-press action when a double press is intended, the output toggle for a single press is **deferred** by 0.4 seconds (the double-press detection window). If a second press arrives within that window, the pending single-press toggle is cancelled and the double-press action fires instead. If no second press arrives, the single-press toggle is applied normally after the window expires.
+To avoid triggering a single-press action when a double press is intended, the output toggle for a single press is **deferred** until 0.4 seconds after the first release (the double-press detection window). If a second press arrives within that window, the pending single-press toggle is cancelled and the double-press action fires instead. If no second press arrives within 0.4 seconds of the first release, the single-press toggle is applied normally.
 
 When no double press action is configured (`None`), only the `switch_control_double_press` event is fired and the outputs are left unchanged.
 
@@ -85,7 +85,7 @@ When the sensor changes state the integration fires the following [Home Assistan
 |---|---|---|
 | `switch_control_button_pressed` | Immediately on every press | `entity_id` |
 | `switch_control_button_released` | Immediately on every button release | `entity_id` |
-| `switch_control_double_press` | When a second press is detected within 0.4 s | `entity_id` |
+| `switch_control_double_press` | When a second press is detected within 0.4 s of the first release | `entity_id` |
 | `switch_control_long_press` | After 0.5 s of holding | `entity_id` |
 | `switch_control_hold` | Repeatedly every 0.5 s while the button remains held after the long-press threshold | `entity_id` |
 | `switch_control_long_press_released` | When the button is released after a long press | `entity_id` |
