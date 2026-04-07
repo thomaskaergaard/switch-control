@@ -73,7 +73,9 @@ When the sensor is triggered twice within **0.4 seconds**, the integration detec
 - The `switch_control_double_press` event is fired on the Home Assistant event bus.
 - The configurable **Double press action** is applied to the output entities.
 
-When no double press action is configured, both presses toggle the virtual switch state (the net result is that the state returns to what it was before the double press). When a **Double press action** is set to **Toggle**, the outputs are toggled exactly once from the state they were in before the first press. This means the final output matches what a single press would produce.
+To avoid triggering a single-press action when a double press is intended, the output toggle for a single press is **deferred** by 0.4 seconds (the double-press detection window). If a second press arrives within that window, the pending single-press toggle is cancelled and the double-press action fires instead. If no second press arrives, the single-press toggle is applied normally after the window expires.
+
+When no double press action is configured (`None`), only the `switch_control_double_press` event is fired and the outputs are left unchanged.
 
 ### Long press and hold
 
