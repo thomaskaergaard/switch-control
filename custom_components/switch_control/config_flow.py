@@ -13,6 +13,9 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
     EntitySelector,
     EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -20,6 +23,7 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    CONF_DIM_AUTO_THRESHOLD,
     CONF_DOUBLE_PRESS_ACTION,
     CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS,
     CONF_LONG_PRESS_ACTION,
@@ -30,6 +34,7 @@ from .const import (
     CONF_SWITCH_COUNT,
     CONF_SWITCHES,
     DEFAULT_NAME,
+    DIM_AUTO_THRESHOLD,
     DOMAIN,
     DOUBLE_PRESS_ACTION_NONE,
     DOUBLE_PRESS_ACTION_OPTIONS,
@@ -117,6 +122,9 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_LONG_PRESS_OUTPUT_ENTITY_IDS: user_input.get(
                             CONF_LONG_PRESS_OUTPUT_ENTITY_IDS, []
                         ),
+                        CONF_DIM_AUTO_THRESHOLD: user_input.get(
+                            CONF_DIM_AUTO_THRESHOLD, DIM_AUTO_THRESHOLD
+                        ),
                         CONF_DOUBLE_PRESS_ACTION: user_input.get(
                             CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE
                         ),
@@ -161,6 +169,17 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                     EntitySelectorConfig(
                         domain=["switch", "light"],
                         multiple=True,
+                    )
+                ),
+                vol.Optional(
+                    CONF_DIM_AUTO_THRESHOLD, default=DIM_AUTO_THRESHOLD
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=0,
+                        max=100,
+                        step=1,
+                        unit_of_measurement="%",
+                        mode=NumberSelectorMode.SLIDER,
                     )
                 ),
                 vol.Optional(
@@ -255,6 +274,9 @@ class SwitchControlOptionsFlow(OptionsFlow):
                     CONF_LONG_PRESS_OUTPUT_ENTITY_IDS: user_input.get(
                         CONF_LONG_PRESS_OUTPUT_ENTITY_IDS, []
                     ),
+                    CONF_DIM_AUTO_THRESHOLD: user_input.get(
+                        CONF_DIM_AUTO_THRESHOLD, DIM_AUTO_THRESHOLD
+                    ),
                     CONF_DOUBLE_PRESS_ACTION: user_input.get(
                         CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE
                     ),
@@ -302,6 +324,18 @@ class SwitchControlOptionsFlow(OptionsFlow):
                     EntitySelectorConfig(
                         domain=["switch", "light"],
                         multiple=True,
+                    )
+                ),
+                vol.Optional(
+                    CONF_DIM_AUTO_THRESHOLD,
+                    default=current.get(CONF_DIM_AUTO_THRESHOLD, DIM_AUTO_THRESHOLD),
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=0,
+                        max=100,
+                        step=1,
+                        unit_of_measurement="%",
+                        mode=NumberSelectorMode.SLIDER,
                     )
                 ),
                 vol.Optional(
