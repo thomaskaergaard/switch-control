@@ -40,9 +40,11 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
 4. **Step 2…N – Configure each switch input** (repeated for each switch):
    - **Name** – a friendly name for this individual switch (e.g. `Ceiling Light`).
    - **Sensor (input)** – the sensor entity whose state drives the outputs.
-   - **Outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control.
+   - **Press outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control on a short press. Also used as the fallback for long press and double press when their specific output lists are empty.
    - **Long press action** – what the integration should do with the outputs when the button is held for 0.5 s or longer (see [Long press / hold](#long-press--hold) below).
+   - **Long press outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control on a long press or hold. Leave empty to use the press outputs.
    - **Double press action** – what the integration should do with the outputs when the button is pressed twice within 0.4 s (see [Double press](#double-press) below).
+   - **Double press outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control on a double press. Leave empty to use the press outputs.
 5. Click **Submit** on each step.
 
 One virtual switch entity is created for every configured input (e.g. `switch.ceiling_light`, `switch.floor_lamp`). Each entity's state mirrors its own sensor and controls its own set of outputs simultaneously. All entities for the same panel are grouped under a single device.

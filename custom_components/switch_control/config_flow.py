@@ -21,7 +21,9 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     CONF_DOUBLE_PRESS_ACTION,
+    CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS,
     CONF_LONG_PRESS_ACTION,
+    CONF_LONG_PRESS_OUTPUT_ENTITY_IDS,
     CONF_NAME,
     CONF_OUTPUT_ENTITY_IDS,
     CONF_SENSOR_ENTITY_ID,
@@ -112,8 +114,14 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_LONG_PRESS_ACTION: user_input.get(
                             CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE
                         ),
+                        CONF_LONG_PRESS_OUTPUT_ENTITY_IDS: user_input.get(
+                            CONF_LONG_PRESS_OUTPUT_ENTITY_IDS, []
+                        ),
                         CONF_DOUBLE_PRESS_ACTION: user_input.get(
                             CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE
+                        ),
+                        CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS: user_input.get(
+                            CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, []
                         ),
                     }
                 )
@@ -149,6 +157,12 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                         translation_key=CONF_LONG_PRESS_ACTION,
                     )
                 ),
+                vol.Optional(CONF_LONG_PRESS_OUTPUT_ENTITY_IDS, default=[]): EntitySelector(
+                    EntitySelectorConfig(
+                        domain=["switch", "light"],
+                        multiple=True,
+                    )
+                ),
                 vol.Optional(
                     CONF_DOUBLE_PRESS_ACTION, default=DOUBLE_PRESS_ACTION_NONE
                 ): SelectSelector(
@@ -156,6 +170,12 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                         options=DOUBLE_PRESS_ACTION_OPTIONS,
                         mode=SelectSelectorMode.LIST,
                         translation_key=CONF_DOUBLE_PRESS_ACTION,
+                    )
+                ),
+                vol.Optional(CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, default=[]): EntitySelector(
+                    EntitySelectorConfig(
+                        domain=["switch", "light"],
+                        multiple=True,
                     )
                 ),
             }
@@ -232,8 +252,14 @@ class SwitchControlOptionsFlow(OptionsFlow):
                     CONF_LONG_PRESS_ACTION: user_input.get(
                         CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE
                     ),
+                    CONF_LONG_PRESS_OUTPUT_ENTITY_IDS: user_input.get(
+                        CONF_LONG_PRESS_OUTPUT_ENTITY_IDS, []
+                    ),
                     CONF_DOUBLE_PRESS_ACTION: user_input.get(
                         CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE
+                    ),
+                    CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS: user_input.get(
+                        CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, []
                     ),
                 }
                 self.hass.config_entries.async_update_entry(
@@ -270,6 +296,15 @@ class SwitchControlOptionsFlow(OptionsFlow):
                     )
                 ),
                 vol.Optional(
+                    CONF_LONG_PRESS_OUTPUT_ENTITY_IDS,
+                    default=current.get(CONF_LONG_PRESS_OUTPUT_ENTITY_IDS, []),
+                ): EntitySelector(
+                    EntitySelectorConfig(
+                        domain=["switch", "light"],
+                        multiple=True,
+                    )
+                ),
+                vol.Optional(
                     CONF_DOUBLE_PRESS_ACTION,
                     default=current.get(CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE),
                 ): SelectSelector(
@@ -277,6 +312,15 @@ class SwitchControlOptionsFlow(OptionsFlow):
                         options=DOUBLE_PRESS_ACTION_OPTIONS,
                         mode=SelectSelectorMode.LIST,
                         translation_key=CONF_DOUBLE_PRESS_ACTION,
+                    )
+                ),
+                vol.Optional(
+                    CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS,
+                    default=current.get(CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, []),
+                ): EntitySelector(
+                    EntitySelectorConfig(
+                        domain=["switch", "light"],
+                        multiple=True,
                     )
                 ),
             }

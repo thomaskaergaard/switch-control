@@ -18,15 +18,19 @@
         "data": {
           "name": "Name",
           "sensor_entity_id": "Sensor (input)",
-          "output_entity_ids": "Outputs (lamps and outlets)",
+          "output_entity_ids": "Press outputs (lamps and outlets)",
           "long_press_action": "Long press action",
-          "double_press_action": "Double press action"
+          "long_press_output_entity_ids": "Long press outputs (lamps and outlets)",
+          "double_press_action": "Double press action",
+          "double_press_output_entity_ids": "Double press outputs (lamps and outlets)"
         },
         "data_description": {
           "sensor_entity_id": "The sensor whose state (on/off) will control the outputs.",
-          "output_entity_ids": "The switch or light entities to control.",
+          "output_entity_ids": "The switch or light entities to control on a short press. Also used as the fallback for long press and double press when their specific output lists are empty.",
           "long_press_action": "What to do with the outputs when the button is held for 0.5 s or longer. Events are always fired regardless of this setting.",
-          "double_press_action": "What to do with the outputs when the button is pressed twice within 0.4 s. Events are always fired regardless of this setting."
+          "long_press_output_entity_ids": "The switch or light entities to control on a long press or hold. Leave empty to use the press outputs.",
+          "double_press_action": "What to do with the outputs when the button is pressed twice within 0.4 s. Events are always fired regardless of this setting.",
+          "double_press_output_entity_ids": "The switch or light entities to control on a double press. Leave empty to use the press outputs."
         }
       }
     },
@@ -52,15 +56,19 @@
         "data": {
           "name": "Name",
           "sensor_entity_id": "Sensor (input)",
-          "output_entity_ids": "Outputs (lamps and outlets)",
+          "output_entity_ids": "Press outputs (lamps and outlets)",
           "long_press_action": "Long press action",
-          "double_press_action": "Double press action"
+          "long_press_output_entity_ids": "Long press outputs (lamps and outlets)",
+          "double_press_action": "Double press action",
+          "double_press_output_entity_ids": "Double press outputs (lamps and outlets)"
         },
         "data_description": {
           "sensor_entity_id": "The sensor whose state (on/off) will control the outputs.",
-          "output_entity_ids": "The switch or light entities to control.",
+          "output_entity_ids": "The switch or light entities to control on a short press. Also used as the fallback for long press and double press when their specific output lists are empty.",
           "long_press_action": "What to do with the outputs when the button is held for 0.5 s or longer. Events are always fired regardless of this setting.",
-          "double_press_action": "What to do with the outputs when the button is pressed twice within 0.4 s. Events are always fired regardless of this setting."
+          "long_press_output_entity_ids": "The switch or light entities to control on a long press or hold. Leave empty to use the press outputs.",
+          "double_press_action": "What to do with the outputs when the button is pressed twice within 0.4 s. Events are always fired regardless of this setting.",
+          "double_press_output_entity_ids": "The switch or light entities to control on a double press. Leave empty to use the press outputs."
         }
       }
     },
