@@ -47,7 +47,8 @@
       }
     },
     "error": {
-      "sensor_not_found": "The selected sensor entity was not found."
+      "sensor_not_found": "The selected sensor entity was not found.",
+      "sensor_already_in_use": "This sensor is already used by another switch."
     },
     "abort": {
       "already_configured": "This Switch Control is already configured."
@@ -97,7 +98,8 @@
       }
     },
     "error": {
-      "sensor_not_found": "The selected sensor entity was not found."
+      "sensor_not_found": "The selected sensor entity was not found.",
+      "sensor_already_in_use": "This sensor is already used by another switch."
     }
   },
   "selector": {
