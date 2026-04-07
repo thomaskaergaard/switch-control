@@ -11,6 +11,7 @@ CONF_SWITCH_COUNT = "switch_count"
 CONF_SWITCHES = "switches"
 CONF_LONG_PRESS_ACTION = "long_press_action"
 CONF_DOUBLE_PRESS_ACTION = "double_press_action"
+CONF_DIM_AUTO_THRESHOLD = "dim_auto_threshold"
 
 DEFAULT_NAME = "Switch Control"
 SWITCH_COUNT_OPTIONS = ["1", "2", "4"]
@@ -30,6 +31,7 @@ LONG_PRESS_ACTION_TURN_OFF = "turn_off"
 LONG_PRESS_ACTION_TOGGLE = "toggle"
 LONG_PRESS_ACTION_DIM_UP = "dim_up"
 LONG_PRESS_ACTION_DIM_DOWN = "dim_down"
+LONG_PRESS_ACTION_DIM_AUTO = "dim_auto"
 LONG_PRESS_ACTION_OPTIONS = [
     LONG_PRESS_ACTION_NONE,
     LONG_PRESS_ACTION_TURN_ON,
@@ -37,11 +39,13 @@ LONG_PRESS_ACTION_OPTIONS = [
     LONG_PRESS_ACTION_TOGGLE,
     LONG_PRESS_ACTION_DIM_UP,
     LONG_PRESS_ACTION_DIM_DOWN,
+    LONG_PRESS_ACTION_DIM_AUTO,
 ]
 
-# Dimming settings for dim_up / dim_down long press actions
+# Dimming settings for dim_up / dim_down / dim_auto long press actions
 DIM_STEP_PCT = 10  # brightness change per step in percent
 DIM_INTERVAL = 0.3  # seconds between each brightness step
+DIM_AUTO_THRESHOLD = 60  # brightness percentage above which dim_auto dims down
 
 # Double press action options (same set as long press)
 DOUBLE_PRESS_ACTION_NONE = "none"

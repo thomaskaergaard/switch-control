@@ -43,6 +43,7 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
    - **Press outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control on a short press. Also used as the fallback for long press and double press when their specific output lists are empty.
    - **Long press action** – what the integration should do with the outputs when the button is held for 0.5 s or longer (see [Long press / hold](#long-press--hold) below).
    - **Long press outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control on a long press or hold. Leave empty to use the press outputs.
+   - **Dim auto threshold** – brightness percentage (0–100, default 60) used by the **Dim auto** long press action to decide whether to dim up or down. When the current brightness is above this value the light dims down; otherwise it dims up.
    - **Double press action** – what the integration should do with the outputs when the button is pressed twice within 0.4 s (see [Double press](#double-press) below).
    - **Double press outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control on a double press. Leave empty to use the press outputs.
 5. Click **Submit** on each step.
@@ -107,6 +108,7 @@ The **Long press action** setting (configured per switch input) lets you choose 
 | **Toggle** | Toggles all configured outputs once from their state before the first press when the long press threshold is reached. |
 | **Dim up** | Repeatedly increases the brightness of all configured `light` entities by 10 % every 0.3 s while the button is held. Stops when the button is released. |
 | **Dim down** | Repeatedly decreases the brightness of all configured `light` entities by 10 % every 0.3 s while the button is held. Stops when the button is released. |
+| **Dim auto** | Automatically chooses the dim direction at the start of the long press based on the current brightness. Dims **down** when brightness is above the configured threshold (default 60 %), and **up** when below. Useful when you always want to dim toward a mid-level without having to remember which direction the lights are currently at. |
 
 Events are always fired regardless of the action settings, so you can combine a built-in action with automation logic if needed.
 

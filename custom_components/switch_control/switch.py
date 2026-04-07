@@ -15,6 +15,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.const import STATE_ON, STATE_OFF
 
 from .const import (
+    CONF_DIM_AUTO_THRESHOLD,
     CONF_DOUBLE_PRESS_ACTION,
     CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS,
     CONF_LONG_PRESS_ACTION,
@@ -23,6 +24,7 @@ from .const import (
     CONF_OUTPUT_ENTITY_IDS,
     CONF_SENSOR_ENTITY_ID,
     CONF_SWITCHES,
+    DIM_AUTO_THRESHOLD,
     DIM_INTERVAL,
     DIM_STEP_PCT,
     DOMAIN,
@@ -38,6 +40,7 @@ from .const import (
     EVENT_LONG_PRESS,
     EVENT_LONG_PRESS_RELEASED,
     HOLD_REPEAT_INTERVAL,
+    LONG_PRESS_ACTION_DIM_AUTO,
     LONG_PRESS_ACTION_DIM_DOWN,
     LONG_PRESS_ACTION_DIM_UP,
     LONG_PRESS_ACTION_NONE,
@@ -82,6 +85,9 @@ async def async_setup_entry(
                     double_press_output_entity_ids=switch_cfg.get(
                         CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, []
                     ),
+                    dim_auto_threshold=switch_cfg.get(
+                        CONF_DIM_AUTO_THRESHOLD, DIM_AUTO_THRESHOLD
+                    ),
                 )
             )
     else:
@@ -98,6 +104,7 @@ async def async_setup_entry(
                 long_press_output_entity_ids=data.get(CONF_LONG_PRESS_OUTPUT_ENTITY_IDS, []),
                 double_press_action=data.get(CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE),
                 double_press_output_entity_ids=data.get(CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, []),
+                dim_auto_threshold=data.get(CONF_DIM_AUTO_THRESHOLD, DIM_AUTO_THRESHOLD),
             )
         )
 
@@ -122,6 +129,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         long_press_output_entity_ids: list[str] | None = None,
         double_press_action: str = DOUBLE_PRESS_ACTION_NONE,
         double_press_output_entity_ids: list[str] | None = None,
+        dim_auto_threshold: int = DIM_AUTO_THRESHOLD,
     ) -> None:
         """Initialize the Switch Control entity."""
         self._entry = entry
@@ -134,6 +142,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._long_press_output_entity_ids: list[str] = long_press_output_entity_ids or []
         self._double_press_action = double_press_action
         self._double_press_output_entity_ids: list[str] = double_press_output_entity_ids or []
+        self._dim_auto_threshold = dim_auto_threshold
         self._attr_is_on = False
         self._long_press_task: asyncio.Task | None = None
         self._long_press_fired: bool = False
@@ -204,6 +213,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         new_long_outputs = sw.get(CONF_LONG_PRESS_OUTPUT_ENTITY_IDS, [])
         new_double = sw.get(CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE)
         new_double_outputs = sw.get(CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, [])
+        new_dim_auto_threshold = sw.get(CONF_DIM_AUTO_THRESHOLD, DIM_AUTO_THRESHOLD)
         new_name = sw[CONF_NAME]
 
         # Re-register the sensor listener if the sensor entity has changed
@@ -221,6 +231,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._long_press_output_entity_ids = new_long_outputs
         self._double_press_action = new_double
         self._double_press_output_entity_ids = new_double_outputs
+        self._dim_auto_threshold = new_dim_auto_threshold
         self._attr_name = new_name
         self.async_write_ha_state()
 
@@ -384,7 +395,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             self._attr_is_on = target
             await self._apply_outputs(target, self._get_long_press_outputs())
             self.async_write_ha_state()
-        elif self._long_press_action in (LONG_PRESS_ACTION_DIM_UP, LONG_PRESS_ACTION_DIM_DOWN):
+        elif self._long_press_action in (LONG_PRESS_ACTION_DIM_UP, LONG_PRESS_ACTION_DIM_DOWN, LONG_PRESS_ACTION_DIM_AUTO):
             self._dim_task = self.hass.async_create_task(self._apply_dim_loop())
 
         # Continue firing hold events at regular intervals while the button remains
@@ -399,11 +410,14 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
 
     async def _apply_dim_loop(self) -> None:
         """Repeatedly step brightness up or down while the button is held."""
-        step = (
-            DIM_STEP_PCT
-            if self._long_press_action == LONG_PRESS_ACTION_DIM_UP
-            else -DIM_STEP_PCT
-        )
+        if self._long_press_action == LONG_PRESS_ACTION_DIM_AUTO:
+            step = self._determine_dim_auto_step()
+        else:
+            step = (
+                DIM_STEP_PCT
+                if self._long_press_action == LONG_PRESS_ACTION_DIM_UP
+                else -DIM_STEP_PCT
+            )
         while True:
             for entity_id in self._get_long_press_outputs():
                 if entity_id.split(".")[0] == "light":
@@ -414,6 +428,25 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                         blocking=False,
                     )
             await asyncio.sleep(DIM_INTERVAL)
+
+    def _determine_dim_auto_step(self) -> int:
+        """Determine dim direction based on the current brightness of the first active light.
+
+        Returns a positive step value to dim up, or a negative step value to dim down.
+        If the brightness is above the configured threshold, dims down; otherwise dims up.
+        Falls back to dim up when no brightness information is available.
+        """
+        for entity_id in self._get_long_press_outputs():
+            if entity_id.split(".")[0] == "light":
+                state = self.hass.states.get(entity_id)
+                if state is not None and state.state == "on":
+                    brightness = state.attributes.get("brightness")
+                    if brightness is not None:
+                        brightness_pct = brightness / 255 * 100
+                        if brightness_pct > self._dim_auto_threshold:
+                            return -DIM_STEP_PCT  # dim down
+                        return DIM_STEP_PCT  # dim up
+        return DIM_STEP_PCT  # default to dim up
 
     async def _apply_double_press_action(self) -> None:
         """Apply the configured double-press action to all output entities."""
@@ -473,4 +506,5 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             "long_press_output_entity_ids": self._long_press_output_entity_ids,
             "double_press_action": self._double_press_action,
             "double_press_output_entity_ids": self._double_press_output_entity_ids,
+            "dim_auto_threshold": self._dim_auto_threshold,
         }
