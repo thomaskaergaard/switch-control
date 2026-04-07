@@ -136,7 +136,12 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
         def _listener(event: Event) -> None:
             entity_id: str = event.data.get("entity_id", "")
             domain = entity_id.split(".")[0] if "." in entity_id else ""
-            if domain in (BINARY_SENSOR_DOMAIN, SENSOR_DOMAIN) and not future.done():
+            if domain not in (BINARY_SENSOR_DOMAIN, SENSOR_DOMAIN):
+                return
+            new_state = event.data.get("new_state")
+            if getattr(new_state, "state", None) not in ("on", "off"):
+                return
+            if not future.done():
                 future.set_result(entity_id)
 
         unsub = self.hass.bus.async_listen(EVENT_STATE_CHANGED, _listener)
