@@ -1,6 +1,7 @@
 """Config flow for the Switch Control integration."""
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import voluptuous as vol
@@ -8,7 +9,8 @@ import voluptuous as vol
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
-from homeassistant.core import callback
+from homeassistant.const import EVENT_STATE_CHANGED
+from homeassistant.core import Event, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
     ActionSelector,
@@ -60,6 +62,8 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
         self._data: dict[str, Any] = {}
         self._switch_count: int = 0
         self._current_switch: int = 0
+        self._detected_sensor: str | None = None
+        self._detect_task: asyncio.Task | None = None
 
     @staticmethod
     @callback
@@ -79,7 +83,7 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
             self._data[CONF_SWITCH_COUNT] = self._switch_count
             self._data[CONF_SWITCHES] = []
             self._current_switch = 1
-            return await self.async_step_switch()
+            return await self.async_step_switch_detect()
 
         schema = vol.Schema(
             {
@@ -98,6 +102,50 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=schema,
             errors=errors,
         )
+
+    async def async_step_switch_detect(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show a progress screen while listening for a physical button press."""
+        if self._detect_task is None:
+            self._detected_sensor = None
+            self._detect_task = self.hass.async_create_task(
+                self._async_detect_sensor_input()
+            )
+
+        if not self._detect_task.done():
+            return self.async_show_progress(
+                step_id="switch_detect",
+                progress_action="detecting_input",
+                progress_task=self._detect_task,
+                description_placeholders={
+                    "switch_num": str(self._current_switch),
+                    "switch_count": str(self._switch_count),
+                },
+            )
+
+        self._detect_task = None
+        return self.async_show_progress_done(next_step_id="switch")
+
+    async def _async_detect_sensor_input(self) -> None:
+        """Listen for a state-change event to auto-detect the input sensor entity."""
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[str] = loop.create_future()
+
+        @callback
+        def _listener(event: Event) -> None:
+            entity_id: str = event.data.get("entity_id", "")
+            domain = entity_id.split(".")[0] if "." in entity_id else ""
+            if domain in (BINARY_SENSOR_DOMAIN, SENSOR_DOMAIN) and not future.done():
+                future.set_result(entity_id)
+
+        unsub = self.hass.bus.async_listen(EVENT_STATE_CHANGED, _listener)
+        try:
+            self._detected_sensor = await asyncio.wait_for(future, timeout=30.0)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            self._detected_sensor = None
+        finally:
+            unsub()
 
     async def async_step_switch(
         self, user_input: dict[str, Any] | None = None
@@ -163,13 +211,20 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                         data=self._data,
                     )
 
-                return await self.async_step_switch()
+                return await self.async_step_switch_detect()
 
+        detected = self._detected_sensor
+        self._detected_sensor = None
         default_switch_name = f"Switch {self._current_switch}"
+        sensor_field = (
+            vol.Required(CONF_SENSOR_ENTITY_ID, default=detected)
+            if detected
+            else vol.Required(CONF_SENSOR_ENTITY_ID)
+        )
         schema = vol.Schema(
             {
                 vol.Required(CONF_NAME, default=default_switch_name): TextSelector(),
-                vol.Required(CONF_SENSOR_ENTITY_ID): EntitySelector(
+                sensor_field: EntitySelector(
                     EntitySelectorConfig(domain=[BINARY_SENSOR_DOMAIN, SENSOR_DOMAIN])
                 ),
                 vol.Optional(CONF_OUTPUT_ENTITY_IDS, default=[]): EntitySelector(

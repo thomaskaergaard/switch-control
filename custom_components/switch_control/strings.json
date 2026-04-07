@@ -12,6 +12,10 @@
           "switch_count": "Each switch input controls its own set of output entities."
         }
       },
+      "switch_detect": {
+        "title": "Detect switch input",
+        "description": "Press switch {switch_num} of {switch_count} now. The first binary sensor or sensor entity that changes state will be suggested as the input."
+      },
       "switch": {
         "title": "Configure switch input",
         "description": "Set up switch {switch_num} of {switch_count}.",
@@ -49,6 +53,9 @@
     "error": {
       "sensor_not_found": "The selected sensor entity was not found.",
       "sensor_already_in_use": "This sensor is already used by another switch."
+    },
+    "progress": {
+      "detecting_input": "Waiting for a button press to detect the input entity..."
     },
     "abort": {
       "already_configured": "This Switch Control is already configured."
