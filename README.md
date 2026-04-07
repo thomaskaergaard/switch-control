@@ -71,17 +71,18 @@ When no double press action is configured, both presses toggle the virtual switc
 
 ### Long press and hold
 
-When the sensor stays `on` for **0.5 seconds or longer**, the integration fires the following [Home Assistant events](https://www.home-assistant.io/docs/configuration/events/) on the event bus and optionally performs a built-in action on the configured output entities:
+When the sensor changes state the integration fires the following [Home Assistant events](https://www.home-assistant.io/docs/configuration/events/) on the event bus and optionally performs a built-in action on the configured output entities:
 
 | Event | When fired | Event data |
 |---|---|---|
 | `switch_control_button_pressed` | Immediately on every press | `entity_id` |
+| `switch_control_button_released` | Immediately on every button release | `entity_id` |
 | `switch_control_double_press` | When a second press is detected within 0.4 s | `entity_id` |
 | `switch_control_long_press` | After 0.5 s of holding | `entity_id` |
 | `switch_control_hold` | Repeatedly every 0.5 s while the button remains held after the long-press threshold | `entity_id` |
 | `switch_control_long_press_released` | When the button is released after a long press | `entity_id` |
 
-The `switch_control_long_press` event fires **once** when the threshold is first reached and applies the configured long press action. The `switch_control_hold` event then fires **repeatedly every 0.5 s** for as long as the button is held, making it ideal for continuous actions such as dimming. `switch_control_long_press_released` fires when the button is finally released.
+The `switch_control_long_press` event fires **once** when the threshold is first reached and applies the configured long press action. The `switch_control_hold` event then fires **repeatedly every 0.5 s** for as long as the button is held, making it ideal for continuous actions such as dimming. When the button is released after a long press, both `switch_control_long_press_released` and `switch_control_button_released` are fired. `switch_control_button_released` is always fired on every button release, regardless of press type.
 
 #### Configurable double press action
 
