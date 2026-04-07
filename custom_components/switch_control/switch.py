@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Callable
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
@@ -66,6 +66,7 @@ async def async_setup_entry(
                     sensor_entity_id=switch_cfg[CONF_SENSOR_ENTITY_ID],
                     output_entity_ids=switch_cfg[CONF_OUTPUT_ENTITY_IDS],
                     unique_id=f"{entry.entry_id}_switch_{i + 1}",
+                    switch_index=i,
                     long_press_action=switch_cfg.get(
                         CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE
                     ),
@@ -83,6 +84,7 @@ async def async_setup_entry(
                 sensor_entity_id=data[CONF_SENSOR_ENTITY_ID],
                 output_entity_ids=data[CONF_OUTPUT_ENTITY_IDS],
                 unique_id=entry.entry_id,
+                switch_index=None,
                 long_press_action=data.get(CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE),
                 double_press_action=data.get(CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE),
             )
@@ -104,6 +106,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         sensor_entity_id: str,
         output_entity_ids: list[str],
         unique_id: str,
+        switch_index: int | None = None,
         long_press_action: str = LONG_PRESS_ACTION_NONE,
         double_press_action: str = DOUBLE_PRESS_ACTION_NONE,
     ) -> None:
@@ -113,6 +116,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._attr_unique_id = unique_id
         self._sensor_entity_id = sensor_entity_id
         self._output_entity_ids = output_entity_ids
+        self._switch_index = switch_index
         self._long_press_action = long_press_action
         self._double_press_action = double_press_action
         self._attr_is_on = False
@@ -121,6 +125,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._dim_task: asyncio.Task | None = None
         self._press_count: int = 0
         self._double_press_window_task: asyncio.Task | None = None
+        self._remove_sensor_listener: Callable[[], None] | None = None
         self._pre_press_state: bool = False
 
     @property
@@ -140,15 +145,64 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         if last_state is not None:
             self._attr_is_on = last_state.state == STATE_ON
 
-        # Track the sensor state changes
+        # Track the sensor state changes; store cancel function for re-registration
+        self._remove_sensor_listener = async_track_state_change_event(
+            self.hass,
+            [self._sensor_entity_id],
+            self._handle_sensor_state_change,
+        )
+        self.async_on_remove(self._cleanup_sensor_listener)
+
+        # Listen for config entry changes and update settings in-place
         self.async_on_remove(
-            async_track_state_change_event(
+            self._entry.add_update_listener(self._async_config_updated)
+        )
+
+        self.async_write_ha_state()
+
+    def _cleanup_sensor_listener(self) -> None:
+        """Cancel the sensor state-change listener."""
+        if self._remove_sensor_listener is not None:
+            self._remove_sensor_listener()
+            self._remove_sensor_listener = None
+
+    def _get_switch_config(self, data: dict[str, Any]) -> dict[str, Any] | None:
+        """Return the config dict for this entity from entry data, or None if unavailable."""
+        if self._switch_index is None:
+            # Legacy single-switch format: config lives at the top level
+            return data
+        if CONF_SWITCHES in data and self._switch_index < len(data[CONF_SWITCHES]):
+            return data[CONF_SWITCHES][self._switch_index]
+        return None
+
+    async def _async_config_updated(
+        self, hass: HomeAssistant, entry: ConfigEntry
+    ) -> None:
+        """Update entity settings in-place when the config entry is changed."""
+        sw = self._get_switch_config(entry.data)
+        if sw is None:
+            return
+
+        new_sensor = sw[CONF_SENSOR_ENTITY_ID]
+        new_outputs = sw[CONF_OUTPUT_ENTITY_IDS]
+        new_long = sw.get(CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE)
+        new_double = sw.get(CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE)
+        new_name = sw[CONF_NAME]
+
+        # Re-register the sensor listener if the sensor entity has changed
+        if new_sensor != self._sensor_entity_id:
+            self._cleanup_sensor_listener()
+            self._sensor_entity_id = new_sensor
+            self._remove_sensor_listener = async_track_state_change_event(
                 self.hass,
                 [self._sensor_entity_id],
                 self._handle_sensor_state_change,
             )
-        )
 
+        self._output_entity_ids = new_outputs
+        self._long_press_action = new_long
+        self._double_press_action = new_double
+        self._attr_name = new_name
         self.async_write_ha_state()
 
     @callback
