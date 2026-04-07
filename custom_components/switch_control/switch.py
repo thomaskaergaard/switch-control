@@ -290,12 +290,12 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             self._press_count += 1
 
             if self._press_count == 1:
-                # First press: toggle the output state immediately
+                # First press: record the pre-press state but defer the output
+                # toggle until the double-press detection window expires.  This
+                # prevents a single-press action from firing when the user is
+                # actually performing a double press.
                 self._long_press_fired = False
                 self._pre_press_state = self._attr_is_on
-                self._attr_is_on = not self._attr_is_on
-                self.async_write_ha_state()
-                self.hass.async_create_task(self._apply_outputs(self._attr_is_on))
 
                 # Notify listeners that the button was pressed
                 self.hass.bus.async_fire(
@@ -314,9 +314,11 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                     self._detect_long_press()
                 )
 
-                # Start the double-press detection window
+                # Start the double-press detection window.  When the window
+                # expires without a second press, the task applies the
+                # single-press toggle.
                 self._double_press_window_task = self.hass.async_create_task(
-                    self._reset_press_count()
+                    self._apply_single_press_after_window()
                 )
 
             elif self._press_count == 2:
@@ -355,12 +357,10 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                     )
 
                 if self._double_press_action == DOUBLE_PRESS_ACTION_NONE:
-                    # No specific action: treat the second press as a normal toggle.
-                    self._attr_is_on = not self._attr_is_on
-                    self.async_write_ha_state()
-                    self.hass.async_create_task(self._apply_outputs(self._attr_is_on))
+                    # No specific action: fire the event only, leave outputs unchanged.
+                    pass
                 else:
-                    # Apply the configured action directly, overriding the second press.
+                    # Apply the configured action directly.
                     self.hass.async_create_task(self._apply_double_press_action())
         else:
             # Button released: cancel any pending long-press timer
@@ -401,9 +401,19 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                     self._run_actions(self._released_actions, "released")
                 )
 
-    async def _reset_press_count(self) -> None:
-        """Reset the press counter after the double-press detection window expires."""
+    async def _apply_single_press_after_window(self) -> None:
+        """Apply the single-press toggle once the double-press window expires.
+
+        Waits for DOUBLE_PRESS_THRESHOLD without a second press, then toggles
+        the outputs.  If the task is cancelled because a second press was
+        detected the toggle is skipped entirely, so the double-press action
+        takes over without any prior single-press toggle having fired.
+        """
         await asyncio.sleep(DOUBLE_PRESS_THRESHOLD)
+        # No second press arrived within the window: apply the single-press toggle.
+        self._attr_is_on = not self._pre_press_state
+        self.async_write_ha_state()
+        await self._apply_outputs(self._attr_is_on)
         self._press_count = 0
 
     async def _run_actions(self, actions: list[dict], label: str) -> None:
@@ -444,8 +454,11 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             raise
         self._long_press_fired = True
 
-        # Revert the initial press toggle so the long press action starts from
-        # the pre-press state, not the already-toggled state.
+        # Revert the single-press toggle that was applied when the double-press
+        # window expired (0.4 s ago) so the long press action starts cleanly
+        # from the pre-press state.  The long press threshold (0.5 s) is always
+        # longer than the double-press window (0.4 s), so the toggle is
+        # guaranteed to have been applied before reaching this point.
         self._attr_is_on = self._pre_press_state
         await self._apply_outputs(self._pre_press_state)
         self.async_write_ha_state()
