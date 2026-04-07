@@ -351,6 +351,13 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         except asyncio.CancelledError:
             raise
         self._long_press_fired = True
+
+        # Revert the initial press toggle so the long press action starts from
+        # the pre-press state, not the already-toggled state.
+        self._attr_is_on = self._pre_press_state
+        await self._apply_outputs(self._pre_press_state)
+        self.async_write_ha_state()
+
         self.hass.bus.async_fire(
             EVENT_LONG_PRESS,
             {"entity_id": self.entity_id},
@@ -365,13 +372,11 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             await self._apply_outputs(False, self._get_long_press_outputs())
             self.async_write_ha_state()
         elif self._long_press_action == LONG_PRESS_ACTION_TOGGLE:
-            # Toggle from the state that was active before the first press so that
-            # the initial press-toggle and the long-press toggle don't cancel each out.
+            # Toggle from the pre-press state (already restored above).
             target = not self._pre_press_state
-            if self._attr_is_on != target:
-                self._attr_is_on = target
-                await self._apply_outputs(target, self._get_long_press_outputs())
-                self.async_write_ha_state()
+            self._attr_is_on = target
+            await self._apply_outputs(target, self._get_long_press_outputs())
+            self.async_write_ha_state()
         elif self._long_press_action in (LONG_PRESS_ACTION_DIM_UP, LONG_PRESS_ACTION_DIM_DOWN):
             self._dim_task = self.hass.async_create_task(self._apply_dim_loop())
 
