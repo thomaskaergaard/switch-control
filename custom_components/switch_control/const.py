@@ -4,6 +4,8 @@ DOMAIN = "switch_control"
 
 CONF_SENSOR_ENTITY_ID = "sensor_entity_id"
 CONF_OUTPUT_ENTITY_IDS = "output_entity_ids"
+CONF_LONG_PRESS_OUTPUT_ENTITY_IDS = "long_press_output_entity_ids"
+CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS = "double_press_output_entity_ids"
 CONF_NAME = "name"
 CONF_SWITCH_COUNT = "switch_count"
 CONF_SWITCHES = "switches"

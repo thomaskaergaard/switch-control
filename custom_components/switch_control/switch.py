@@ -16,7 +16,9 @@ from homeassistant.const import STATE_ON, STATE_OFF
 
 from .const import (
     CONF_DOUBLE_PRESS_ACTION,
+    CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS,
     CONF_LONG_PRESS_ACTION,
+    CONF_LONG_PRESS_OUTPUT_ENTITY_IDS,
     CONF_NAME,
     CONF_OUTPUT_ENTITY_IDS,
     CONF_SENSOR_ENTITY_ID,
@@ -70,8 +72,14 @@ async def async_setup_entry(
                     long_press_action=switch_cfg.get(
                         CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE
                     ),
+                    long_press_output_entity_ids=switch_cfg.get(
+                        CONF_LONG_PRESS_OUTPUT_ENTITY_IDS, []
+                    ),
                     double_press_action=switch_cfg.get(
                         CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE
+                    ),
+                    double_press_output_entity_ids=switch_cfg.get(
+                        CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, []
                     ),
                 )
             )
@@ -86,7 +94,9 @@ async def async_setup_entry(
                 unique_id=entry.entry_id,
                 switch_index=None,
                 long_press_action=data.get(CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE),
+                long_press_output_entity_ids=data.get(CONF_LONG_PRESS_OUTPUT_ENTITY_IDS, []),
                 double_press_action=data.get(CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE),
+                double_press_output_entity_ids=data.get(CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, []),
             )
         )
 
@@ -108,7 +118,9 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         unique_id: str,
         switch_index: int | None = None,
         long_press_action: str = LONG_PRESS_ACTION_NONE,
+        long_press_output_entity_ids: list[str] | None = None,
         double_press_action: str = DOUBLE_PRESS_ACTION_NONE,
+        double_press_output_entity_ids: list[str] | None = None,
     ) -> None:
         """Initialize the Switch Control entity."""
         self._entry = entry
@@ -118,7 +130,9 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._output_entity_ids = output_entity_ids
         self._switch_index = switch_index
         self._long_press_action = long_press_action
+        self._long_press_output_entity_ids: list[str] = long_press_output_entity_ids or []
         self._double_press_action = double_press_action
+        self._double_press_output_entity_ids: list[str] = double_press_output_entity_ids or []
         self._attr_is_on = False
         self._long_press_task: asyncio.Task | None = None
         self._long_press_fired: bool = False
@@ -186,7 +200,9 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         new_sensor = sw[CONF_SENSOR_ENTITY_ID]
         new_outputs = sw[CONF_OUTPUT_ENTITY_IDS]
         new_long = sw.get(CONF_LONG_PRESS_ACTION, LONG_PRESS_ACTION_NONE)
+        new_long_outputs = sw.get(CONF_LONG_PRESS_OUTPUT_ENTITY_IDS, [])
         new_double = sw.get(CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE)
+        new_double_outputs = sw.get(CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, [])
         new_name = sw[CONF_NAME]
 
         # Re-register the sensor listener if the sensor entity has changed
@@ -201,9 +217,25 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
 
         self._output_entity_ids = new_outputs
         self._long_press_action = new_long
+        self._long_press_output_entity_ids = new_long_outputs
         self._double_press_action = new_double
+        self._double_press_output_entity_ids = new_double_outputs
         self._attr_name = new_name
         self.async_write_ha_state()
+
+    def _get_long_press_outputs(self) -> list[str]:
+        """Return the output entities to use for long press/hold actions.
+
+        Falls back to the main output list when no long-press-specific list is configured.
+        """
+        return self._long_press_output_entity_ids or self._output_entity_ids
+
+    def _get_double_press_outputs(self) -> list[str]:
+        """Return the output entities to use for double press actions.
+
+        Falls back to the main output list when no double-press-specific list is configured.
+        """
+        return self._double_press_output_entity_ids or self._output_entity_ids
 
     @callback
     def _handle_sensor_state_change(self, event: Any) -> None:
@@ -326,11 +358,11 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
 
         if self._long_press_action == LONG_PRESS_ACTION_TURN_ON:
             self._attr_is_on = True
-            await self._apply_outputs(True)
+            await self._apply_outputs(True, self._get_long_press_outputs())
             self.async_write_ha_state()
         elif self._long_press_action == LONG_PRESS_ACTION_TURN_OFF:
             self._attr_is_on = False
-            await self._apply_outputs(False)
+            await self._apply_outputs(False, self._get_long_press_outputs())
             self.async_write_ha_state()
         elif self._long_press_action == LONG_PRESS_ACTION_TOGGLE:
             # Toggle from the state that was active before the first press so that
@@ -338,7 +370,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             target = not self._pre_press_state
             if self._attr_is_on != target:
                 self._attr_is_on = target
-                await self._apply_outputs(target)
+                await self._apply_outputs(target, self._get_long_press_outputs())
                 self.async_write_ha_state()
         elif self._long_press_action in (LONG_PRESS_ACTION_DIM_UP, LONG_PRESS_ACTION_DIM_DOWN):
             self._dim_task = self.hass.async_create_task(self._apply_dim_loop())
@@ -361,7 +393,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             else -DIM_STEP_PCT
         )
         while True:
-            for entity_id in self._output_entity_ids:
+            for entity_id in self._get_long_press_outputs():
                 if entity_id.split(".")[0] == "light":
                     await self.hass.services.async_call(
                         "light",
@@ -375,11 +407,11 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         """Apply the configured double-press action to all output entities."""
         if self._double_press_action == DOUBLE_PRESS_ACTION_TURN_ON:
             self._attr_is_on = True
-            await self._apply_outputs(True)
+            await self._apply_outputs(True, self._get_double_press_outputs())
             self.async_write_ha_state()
         elif self._double_press_action == DOUBLE_PRESS_ACTION_TURN_OFF:
             self._attr_is_on = False
-            await self._apply_outputs(False)
+            await self._apply_outputs(False, self._get_double_press_outputs())
             self.async_write_ha_state()
         elif self._double_press_action == DOUBLE_PRESS_ACTION_TOGGLE:
             # Toggle from the state that was active before the first press so that
@@ -387,12 +419,17 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             target = not self._pre_press_state
             if self._attr_is_on != target:
                 self._attr_is_on = target
-                await self._apply_outputs(target)
+                await self._apply_outputs(target, self._get_double_press_outputs())
                 self.async_write_ha_state()
 
-    async def _apply_outputs(self, turn_on: bool) -> None:
-        """Turn all output entities on or off."""
-        for entity_id in self._output_entity_ids:
+    async def _apply_outputs(self, turn_on: bool, entity_ids: list[str] | None = None) -> None:
+        """Turn output entities on or off.
+
+        Uses ``entity_ids`` when provided, otherwise falls back to the main
+        ``_output_entity_ids`` list (press/default outputs).
+        """
+        targets = entity_ids if entity_ids is not None else self._output_entity_ids
+        for entity_id in targets:
             domain = entity_id.split(".")[0]
             service = "turn_on" if turn_on else "turn_off"
             await self.hass.services.async_call(
@@ -421,5 +458,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             "sensor_entity_id": self._sensor_entity_id,
             "output_entity_ids": self._output_entity_ids,
             "long_press_action": self._long_press_action,
+            "long_press_output_entity_ids": self._long_press_output_entity_ids,
             "double_press_action": self._double_press_action,
+            "double_press_output_entity_ids": self._double_press_output_entity_ids,
         }
