@@ -411,10 +411,13 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         """
         await asyncio.sleep(DOUBLE_PRESS_THRESHOLD)
         # No second press arrived within the window: apply the single-press toggle.
+        # Reset the press counter first so that any press arriving while the
+        # outputs are being applied is treated as a fresh first press, not as
+        # a (spurious) double-press with already-modified state.
+        self._press_count = 0
         self._attr_is_on = not self._pre_press_state
         self.async_write_ha_state()
         await self._apply_outputs(self._attr_is_on)
-        self._press_count = 0
 
     async def _run_actions(self, actions: list[dict], label: str) -> None:
         """Execute a sequence of Home Assistant automation actions.
@@ -552,13 +555,11 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             await self._apply_outputs(False, self._get_double_press_outputs())
             self.async_write_ha_state()
         elif self._double_press_action == DOUBLE_PRESS_ACTION_TOGGLE:
-            # Toggle from the state that was active before the first press so that
-            # the initial press-toggle and the double-press toggle don't cancel each other out.
+            # Toggle from the state that was active before the first press.
             target = not self._pre_press_state
-            if self._attr_is_on != target:
-                self._attr_is_on = target
-                await self._apply_outputs(target, self._get_double_press_outputs())
-                self.async_write_ha_state()
+            self._attr_is_on = target
+            await self._apply_outputs(target, self._get_double_press_outputs())
+            self.async_write_ha_state()
 
     async def _apply_outputs(self, turn_on: bool, entity_ids: list[str] | None = None) -> None:
         """Turn output entities on or off.
