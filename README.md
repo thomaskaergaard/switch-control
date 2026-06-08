@@ -42,7 +42,6 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
    - **Switches to find** – game length (`2`, `5`, or `10` correct switches).
    - **Round timeout (seconds)** – optional countdown per target switch (`0` disables timeout).
    - **Delay between rounds (seconds)** – pause after each correct switch before the next target.
-   - **Play mode finished actions** – optional automation actions to run when play mode is completed. Useful for notifications to a phone or TV.
 4. **Step 2…N – Configure each switch input** (repeated for each switch):
    - **Name** – a friendly name for this individual switch (e.g. `Ceiling Light`).
    - **Sensor (input)** – the sensor entity whose state drives the outputs.
@@ -58,6 +57,8 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
    - **Long press actions** – optional automation actions to run when a long press is detected after 0.5 s.
    - **Long press released actions** – optional automation actions to run when the button is released after a long press.
 5. Click **Submit** on each step.
+
+To configure **Play mode finished actions** globally (shared across all panels), open any Switch Control entry, go to **Configure**, and set it in the first options step.
 
 One virtual switch entity is created for every configured input (e.g. `switch.ceiling_light`, `switch.floor_lamp`). Each entity's state mirrors its own sensor and controls its own set of outputs simultaneously. All entities for the same panel are grouped under a single device.
 

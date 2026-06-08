@@ -177,7 +177,7 @@ class PanelPlayModeManager:
         self._goal = PLAY_MODE_DEFAULT_ROUNDS
         self._round_timeout = PLAY_MODE_DEFAULT_ROUND_TIMEOUT
         self._round_delay = PLAY_MODE_DEFAULT_ROUND_DELAY
-        self._finished_actions: list[dict] = []
+        self._global_finished_actions: list[dict] = []
         self._active_entry_title = "Switch Control"
 
     def _update_entry_config(
@@ -197,6 +197,16 @@ class PanelPlayModeManager:
             "round_delay": int(data.get(CONF_PLAY_MODE_ROUND_DELAY, PLAY_MODE_DEFAULT_ROUND_DELAY)),
             "finished_actions": data.get(CONF_PLAY_MODE_FINISHED_ACTIONS, []),
         }
+        self._refresh_global_finished_actions()
+
+    def _refresh_global_finished_actions(self) -> None:
+        """Recompute integration-global finished actions from all panel configs."""
+        for entry_id in sorted(self._entry_configs):
+            actions = self._entry_configs[entry_id].get("finished_actions", [])
+            if actions:
+                self._global_finished_actions = actions
+                return
+        self._global_finished_actions = []
 
     @property
     def is_active(self) -> bool:
@@ -235,6 +245,7 @@ class PanelPlayModeManager:
             self._entities.remove(entity)
         if not any(candidate.entry_id == entity.entry_id for candidate in self._entities):
             self._entry_configs.pop(entity.entry_id, None)
+            self._refresh_global_finished_actions()
 
     def is_enabled_for_entry(self, entry_id: str) -> bool:
         """Return True when play mode is enabled for the given panel."""
@@ -295,7 +306,6 @@ class PanelPlayModeManager:
         self._goal = int(config.get("goal", PLAY_MODE_DEFAULT_ROUNDS))
         self._round_timeout = int(config.get("round_timeout", PLAY_MODE_DEFAULT_ROUND_TIMEOUT))
         self._round_delay = int(config.get("round_delay", PLAY_MODE_DEFAULT_ROUND_DELAY))
-        self._finished_actions = config.get("finished_actions", [])
         self._active_entry_title = str(config.get("entry_title", "Switch Control"))
 
         self._hass.bus.async_fire(
@@ -488,7 +498,7 @@ class PanelPlayModeManager:
                 "time_used": elapsed_time,
             },
         )
-        if self._finished_actions:
+        if self._global_finished_actions:
             await self._run_finished_actions(
                 entry_id=entry_id,
                 elapsed_time=elapsed_time,
@@ -520,7 +530,7 @@ class PanelPlayModeManager:
         """Run configured actions for play mode finish."""
         script = Script(
             self._hass,
-            self._finished_actions,
+            self._global_finished_actions,
             f"{self._active_entry_title} play mode finished",
             DOMAIN,
         )

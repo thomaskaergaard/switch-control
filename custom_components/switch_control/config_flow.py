@@ -106,9 +106,6 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
             self._data[CONF_PLAY_MODE_ROUND_DELAY] = int(
                 user_input.get(CONF_PLAY_MODE_ROUND_DELAY, PLAY_MODE_DEFAULT_ROUND_DELAY)
             )
-            self._data[CONF_PLAY_MODE_FINISHED_ACTIONS] = user_input.get(
-                CONF_PLAY_MODE_FINISHED_ACTIONS, []
-            )
             self._data[CONF_SWITCHES] = []
             self._current_switch = 1
             return await self.async_step_switch_detect()
@@ -158,7 +155,6 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                         mode=NumberSelectorMode.BOX,
                     )
                 ),
-                vol.Optional(CONF_PLAY_MODE_FINISHED_ACTIONS, default=[]): ActionSelector(),
             }
         )
 
@@ -369,15 +365,23 @@ class SwitchControlOptionsFlow(OptionsFlow):
     def __init__(self) -> None:
         """Initialize the options flow."""
         self._current_switch_index: int = 0
+        self._global_play_mode_finished_actions: list[dict] = []
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Show a selector for which switch input to reconfigure."""
         switches = self.config_entry.data.get(CONF_SWITCHES, [])
+        global_finished_actions = self.config_entry.data.get(
+            CONF_PLAY_MODE_FINISHED_ACTIONS, []
+        )
 
         if user_input is not None:
             self._current_switch_index = int(user_input["switch_index"])
+            self._global_play_mode_finished_actions = user_input.get(
+                CONF_PLAY_MODE_FINISHED_ACTIONS,
+                global_finished_actions,
+            )
             return await self.async_step_switch()
 
         options = [
@@ -393,6 +397,10 @@ class SwitchControlOptionsFlow(OptionsFlow):
                         mode=SelectSelectorMode.LIST,
                     )
                 ),
+                vol.Optional(
+                    CONF_PLAY_MODE_FINISHED_ACTIONS,
+                    default=global_finished_actions,
+                ): ActionSelector(),
             }
         )
 
@@ -492,12 +500,24 @@ class SwitchControlOptionsFlow(OptionsFlow):
                                 ),
                             )
                         ),
-                        CONF_PLAY_MODE_FINISHED_ACTIONS: user_input.get(
-                            CONF_PLAY_MODE_FINISHED_ACTIONS,
-                            self.config_entry.data.get(CONF_PLAY_MODE_FINISHED_ACTIONS, []),
-                        ),
+                        CONF_PLAY_MODE_FINISHED_ACTIONS: self._global_play_mode_finished_actions,
                     },
                 )
+                for entry in self.hass.config_entries.async_entries(DOMAIN):
+                    if entry.entry_id == self.config_entry.entry_id:
+                        continue
+                    if (
+                        entry.data.get(CONF_PLAY_MODE_FINISHED_ACTIONS, [])
+                        == self._global_play_mode_finished_actions
+                    ):
+                        continue
+                    self.hass.config_entries.async_update_entry(
+                        entry,
+                        data={
+                            **entry.data,
+                            CONF_PLAY_MODE_FINISHED_ACTIONS: self._global_play_mode_finished_actions,
+                        },
+                    )
                 return self.async_create_entry(title="", data={})
 
         schema = vol.Schema(
@@ -635,10 +655,6 @@ class SwitchControlOptionsFlow(OptionsFlow):
                         mode=NumberSelectorMode.BOX,
                     )
                 ),
-                vol.Optional(
-                    CONF_PLAY_MODE_FINISHED_ACTIONS,
-                    default=self.config_entry.data.get(CONF_PLAY_MODE_FINISHED_ACTIONS, []),
-                ): ActionSelector(),
             }
         )
 
