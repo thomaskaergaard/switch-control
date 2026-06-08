@@ -11,7 +11,7 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
 - **Toggle on press** — a momentary press (sensor briefly on then off) toggles the output state. The first press turns outputs on; the next press turns them off.
 - **Double press detection** — two presses within 0.4 seconds fire a `switch_control_double_press` event and can optionally apply a built-in action to the output entities.
 - **Long press detection** — holding the input for 0.5 s or longer fires Home Assistant bus events that you can trigger automations from (e.g. dimming a light).
-- **Play mode** — a panel-level game mode that turns off all panel outputs, lights only one target switch output, and lets the player find the correct physical switch.
+- **Play mode** — an integration-wide game mode that can target switches across all panels with play mode enabled.
 - All virtual switch entities belonging to the same panel are **grouped under a single device** in the Home Assistant device registry for a cleaner UI.
 - The controller exposes one virtual switch entity per input, so you can also toggle each one manually from the UI or automations.
 - Fully configurable through the Home Assistant UI (no YAML required).
@@ -193,14 +193,14 @@ Each virtual switch can also be toggled manually, independently of the sensor, a
 
 ### Play mode
 
-Play mode runs per panel and can be started or stopped through entity services on any switch in the panel:
+Play mode runs across all enabled panels and can be started or stopped through entity services on any switch entity:
 
 - `switch.start_play_mode`
 - `switch.stop_play_mode`
 
 When started, the integration:
 
-1. Turns off all outputs related to switches in the panel.
+1. Turns off all outputs related to enabled play mode switches in the active game.
 2. Randomly selects one switch as the active target.
 3. Turns on only that target switch's press outputs.
 4. Waits for the player to press the correct physical switch.
@@ -210,7 +210,7 @@ Gameplay behavior:
 - Correct press: score increases and the next target starts (after configured delay).
 - Incorrect press: round stays active; the target does not change.
 - Timeout (if configured): `switch_control_play_mode_round_timeout` is fired and a new target is selected.
-- Finish: when configured score goal (`2`, `5`, or `10`) is reached, all panel outputs are turned off.
+- Finish: when configured score goal (`2`, `5`, or `10`) is reached, all game outputs are turned off.
   The finish event includes `time_used` / `elapsed_time` (seconds) so notifications can include total game duration.
 
 Play mode events fired on the Home Assistant event bus:
