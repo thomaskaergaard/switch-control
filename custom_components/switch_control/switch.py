@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from typing import Any, Callable
 
 from homeassistant.components.switch import SwitchEntity
@@ -10,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
@@ -26,6 +28,10 @@ from .const import (
     CONF_LONG_PRESS_RELEASED_ACTIONS,
     CONF_NAME,
     CONF_OUTPUT_ENTITY_IDS,
+    CONF_PLAY_MODE_ENABLED,
+    CONF_PLAY_MODE_ROUND_DELAY,
+    CONF_PLAY_MODE_ROUND_TIMEOUT,
+    CONF_PLAY_MODE_ROUNDS,
     CONF_PRESS_ACTIONS,
     CONF_RELEASED_ACTIONS,
     CONF_SENSOR_ENTITY_ID,
@@ -45,6 +51,13 @@ from .const import (
     EVENT_HOLD,
     EVENT_LONG_PRESS,
     EVENT_LONG_PRESS_RELEASED,
+    EVENT_PLAY_MODE_CORRECT_PRESS,
+    EVENT_PLAY_MODE_FINISHED,
+    EVENT_PLAY_MODE_INCORRECT_PRESS,
+    EVENT_PLAY_MODE_ROUND_STARTED,
+    EVENT_PLAY_MODE_ROUND_TIMEOUT,
+    EVENT_PLAY_MODE_STARTED,
+    EVENT_PLAY_MODE_STOPPED,
     HOLD_REPEAT_INTERVAL,
     LONG_PRESS_ACTION_DIM_AUTO,
     LONG_PRESS_ACTION_DIM_DOWN,
@@ -54,6 +67,10 @@ from .const import (
     LONG_PRESS_ACTION_TURN_OFF,
     LONG_PRESS_ACTION_TURN_ON,
     LONG_PRESS_THRESHOLD,
+    PLAY_MODE_DEFAULT_ENABLED,
+    PLAY_MODE_DEFAULT_ROUND_DELAY,
+    PLAY_MODE_DEFAULT_ROUND_TIMEOUT,
+    PLAY_MODE_DEFAULT_ROUNDS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -67,6 +84,7 @@ async def async_setup_entry(
     """Set up Switch Control switch entities from a config entry."""
     data = hass.data[DOMAIN][entry.entry_id]
     entities: list[SwitchControlEntity] = []
+    play_manager = PanelPlayModeManager(hass, entry, data)
 
     if CONF_SWITCHES in data:
         # Multi-switch format: create one entity per configured switch input.
@@ -101,6 +119,7 @@ async def async_setup_entry(
                     long_press_released_actions=switch_cfg.get(
                         CONF_LONG_PRESS_RELEASED_ACTIONS, []
                     ),
+                    play_manager=play_manager,
                 )
             )
     else:
@@ -118,10 +137,336 @@ async def async_setup_entry(
                 double_press_action=data.get(CONF_DOUBLE_PRESS_ACTION, DOUBLE_PRESS_ACTION_NONE),
                 double_press_output_entity_ids=data.get(CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, []),
                 dim_auto_threshold=data.get(CONF_DIM_AUTO_THRESHOLD, DIM_AUTO_THRESHOLD),
+                play_manager=play_manager,
             )
         )
 
+    services_registered_key = f"{DOMAIN}_entity_services_registered"
+    if not hass.data.get(services_registered_key):
+        platform = entity_platform.async_get_current_platform()
+        platform.async_register_entity_service("start_play_mode", {}, "async_start_play_mode")
+        platform.async_register_entity_service("stop_play_mode", {}, "async_stop_play_mode")
+        hass.data[services_registered_key] = True
+
     async_add_entities(entities)
+
+
+class PanelPlayModeManager:
+    """Shared play mode state and flow for all switches in one panel."""
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, data: dict[str, Any]) -> None:
+        """Initialize panel-level play mode state."""
+        self._hass = hass
+        self._entry = entry
+        self._entities: list[SwitchControlEntity] = []
+        self._active = False
+        self._target_entity: SwitchControlEntity | None = None
+        self._score = 0
+        self._attempts = 0
+        self._timeout_task: asyncio.Task | None = None
+        self._next_round_task: asyncio.Task | None = None
+        self._last_target_unique_id: str | None = None
+        self._update_config(data)
+
+    def _update_config(self, data: dict[str, Any]) -> None:
+        """Refresh play mode settings from config entry data."""
+        self._enabled = data.get(CONF_PLAY_MODE_ENABLED, PLAY_MODE_DEFAULT_ENABLED)
+        self._goal = int(data.get(CONF_PLAY_MODE_ROUNDS, PLAY_MODE_DEFAULT_ROUNDS))
+        self._round_timeout = int(
+            data.get(CONF_PLAY_MODE_ROUND_TIMEOUT, PLAY_MODE_DEFAULT_ROUND_TIMEOUT)
+        )
+        self._round_delay = int(
+            data.get(CONF_PLAY_MODE_ROUND_DELAY, PLAY_MODE_DEFAULT_ROUND_DELAY)
+        )
+
+    @property
+    def is_active(self) -> bool:
+        """Return True when a play mode session is currently running."""
+        return self._active
+
+    @property
+    def enabled(self) -> bool:
+        """Return True when play mode is enabled for this panel."""
+        return self._enabled
+
+    @property
+    def goal(self) -> int:
+        """Return the configured number of correct switches to find."""
+        return self._goal
+
+    @property
+    def score(self) -> int:
+        """Return the current number of correctly found switches."""
+        return self._score
+
+    @property
+    def target_entity_id(self) -> str | None:
+        """Return entity_id for the current target switch, if any."""
+        return self._target_entity.entity_id if self._target_entity else None
+
+    def register_entity(self, entity: SwitchControlEntity) -> None:
+        """Register a switch entity under this panel manager."""
+        if entity not in self._entities:
+            self._entities.append(entity)
+
+    def unregister_entity(self, entity: SwitchControlEntity) -> None:
+        """Unregister a switch entity from this panel manager."""
+        if entity in self._entities:
+            self._entities.remove(entity)
+
+    async def async_config_updated(self, data: dict[str, Any]) -> None:
+        """Update manager config and stop active game if play mode disabled."""
+        was_enabled = self._enabled
+        self._update_config(data)
+        if was_enabled and not self._enabled and self._active:
+            await self.async_stop_game("disabled")
+
+    async def async_start_game(self) -> None:
+        """Start a new play mode game."""
+        if not self._enabled:
+            _LOGGER.debug("Play mode ignored for %s: disabled", self._entry.entry_id)
+            return
+
+        available_entities = [entity for entity in self._entities if entity.has_outputs]
+        if not available_entities:
+            _LOGGER.warning("Play mode ignored for %s: no outputs configured", self._entry.entry_id)
+            return
+
+        await self._cancel_internal_tasks()
+        self._active = True
+        self._score = 0
+        self._attempts = 0
+        self._target_entity = None
+        self._last_target_unique_id = None
+
+        self._hass.bus.async_fire(
+            EVENT_PLAY_MODE_STARTED,
+            {
+                "entry_id": self._entry.entry_id,
+                "goal": self._goal,
+                "round_timeout": self._round_timeout,
+                "round_delay": self._round_delay,
+            },
+        )
+        self._async_write_entities_state()
+        await self._async_start_round()
+
+    async def async_stop_game(self, reason: str = "stopped") -> None:
+        """Stop the active play mode game and clean up outputs."""
+        if not self._active:
+            return
+
+        await self._cancel_internal_tasks()
+        self._active = False
+        self._target_entity = None
+        await self._async_turn_off_all_outputs()
+        self._hass.bus.async_fire(
+            EVENT_PLAY_MODE_STOPPED,
+            {
+                "entry_id": self._entry.entry_id,
+                "reason": reason,
+                "score": self._score,
+                "goal": self._goal,
+                "attempts": self._attempts,
+            },
+        )
+        self._async_write_entities_state()
+
+    async def async_handle_press(self, pressed_entity: SwitchControlEntity) -> None:
+        """Handle a switch press during play mode."""
+        if not self._active or self._target_entity is None:
+            return
+
+        self._attempts += 1
+        if pressed_entity is self._target_entity:
+            self._score += 1
+            self._hass.bus.async_fire(
+                EVENT_PLAY_MODE_CORRECT_PRESS,
+                {
+                    "entry_id": self._entry.entry_id,
+                    "pressed_entity_id": pressed_entity.entity_id,
+                    "target_entity_id": self._target_entity.entity_id,
+                    "score": self._score,
+                    "goal": self._goal,
+                    "attempts": self._attempts,
+                },
+            )
+            await self._cancel_timeout_task()
+            if self._score >= self._goal:
+                await self._async_finish_game()
+                return
+
+            if self._round_delay > 0:
+                self._next_round_task = self._hass.async_create_task(
+                    self._async_start_round_after_delay()
+                )
+            else:
+                await self._async_start_round()
+            self._async_write_entities_state()
+            return
+
+        self._hass.bus.async_fire(
+            EVENT_PLAY_MODE_INCORRECT_PRESS,
+            {
+                "entry_id": self._entry.entry_id,
+                "pressed_entity_id": pressed_entity.entity_id,
+                "target_entity_id": self._target_entity.entity_id,
+                "score": self._score,
+                "goal": self._goal,
+                "attempts": self._attempts,
+            },
+        )
+
+    async def _async_start_round_after_delay(self) -> None:
+        """Start the next target round after configured delay."""
+        try:
+            await asyncio.sleep(self._round_delay)
+        except asyncio.CancelledError:
+            return
+        await self._async_start_round()
+
+    async def _async_start_round(self) -> None:
+        """Select a new target and update outputs for the current round."""
+        if not self._active:
+            return
+
+        await self._cancel_timeout_task()
+        target = self._select_target_entity()
+        if target is None:
+            await self._async_finish_game()
+            return
+
+        self._target_entity = target
+        self._last_target_unique_id = target.unique_id
+        await self._async_turn_off_all_outputs()
+        await self._async_apply_outputs(True, target.output_entity_ids)
+
+        self._hass.bus.async_fire(
+            EVENT_PLAY_MODE_ROUND_STARTED,
+            {
+                "entry_id": self._entry.entry_id,
+                "target_entity_id": target.entity_id,
+                "round": self._score + 1,
+                "goal": self._goal,
+                "score": self._score,
+                "attempts": self._attempts,
+            },
+        )
+        self._async_write_entities_state()
+
+        if self._round_timeout > 0:
+            self._timeout_task = self._hass.async_create_task(
+                self._async_round_timeout(target.unique_id)
+            )
+
+    def _select_target_entity(self) -> SwitchControlEntity | None:
+        """Pick a target entity from configured panel switches."""
+        candidates = [entity for entity in self._entities if entity.has_outputs]
+        if not candidates:
+            return None
+
+        if len(candidates) > 1 and self._last_target_unique_id is not None:
+            non_repeating = [
+                entity for entity in candidates if entity.unique_id != self._last_target_unique_id
+            ]
+            if non_repeating:
+                candidates = non_repeating
+        return random.choice(candidates)
+
+    async def _async_round_timeout(self, target_unique_id: str) -> None:
+        """Handle timeout for the current target round."""
+        try:
+            await asyncio.sleep(self._round_timeout)
+        except asyncio.CancelledError:
+            return
+
+        if (
+            not self._active
+            or self._target_entity is None
+            or self._target_entity.unique_id != target_unique_id
+        ):
+            return
+
+        self._hass.bus.async_fire(
+            EVENT_PLAY_MODE_ROUND_TIMEOUT,
+            {
+                "entry_id": self._entry.entry_id,
+                "target_entity_id": self._target_entity.entity_id,
+                "round": self._score + 1,
+                "goal": self._goal,
+                "score": self._score,
+                "attempts": self._attempts,
+            },
+        )
+        await self._async_start_round()
+
+    async def _async_finish_game(self) -> None:
+        """Finish game after reaching the configured goal."""
+        await self._cancel_internal_tasks()
+        self._active = False
+        await self._async_turn_off_all_outputs()
+        self._hass.bus.async_fire(
+            EVENT_PLAY_MODE_FINISHED,
+            {
+                "entry_id": self._entry.entry_id,
+                "score": self._score,
+                "goal": self._goal,
+                "attempts": self._attempts,
+            },
+        )
+        self._target_entity = None
+        self._async_write_entities_state()
+
+    async def _async_turn_off_all_outputs(self) -> None:
+        """Turn off all outputs referenced by panel switch entities."""
+        outputs: set[str] = set()
+        for entity in self._entities:
+            outputs.update(entity.output_entity_ids)
+        if outputs:
+            await self._async_apply_outputs(False, list(outputs))
+
+    async def _async_apply_outputs(self, turn_on: bool, entity_ids: list[str]) -> None:
+        """Apply on/off service call to a list of entity IDs."""
+        service = "turn_on" if turn_on else "turn_off"
+        for entity_id in entity_ids:
+            domain = entity_id.split(".")[0]
+            await self._hass.services.async_call(
+                domain,
+                service,
+                {"entity_id": entity_id},
+                blocking=False,
+            )
+
+    async def _cancel_timeout_task(self) -> None:
+        """Cancel active round timeout task."""
+        if self._timeout_task is None or self._timeout_task.done():
+            self._timeout_task = None
+            return
+        self._timeout_task.cancel()
+        await self._await_task_cancel(self._timeout_task)
+        self._timeout_task = None
+
+    async def _cancel_internal_tasks(self) -> None:
+        """Cancel all manager-owned pending tasks."""
+        await self._cancel_timeout_task()
+        if self._next_round_task is None or self._next_round_task.done():
+            self._next_round_task = None
+            return
+        self._next_round_task.cancel()
+        await self._await_task_cancel(self._next_round_task)
+        self._next_round_task = None
+
+    async def _await_task_cancel(self, task: asyncio.Task) -> None:
+        """Await cancellation of a task owned by the manager."""
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    def _async_write_entities_state(self) -> None:
+        """Push updated manager-dependent attributes to all panel entities."""
+        for entity in self._entities:
+            entity.async_write_ha_state()
 
 
 class SwitchControlEntity(SwitchEntity, RestoreEntity):
@@ -148,6 +493,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         double_press_actions: list[dict] | None = None,
         long_press_actions: list[dict] | None = None,
         long_press_released_actions: list[dict] | None = None,
+        play_manager: PanelPlayModeManager | None = None,
     ) -> None:
         """Initialize the Switch Control entity."""
         self._entry = entry
@@ -166,6 +512,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._double_press_actions: list[dict] = double_press_actions or []
         self._long_press_actions: list[dict] = long_press_actions or []
         self._long_press_released_actions: list[dict] = long_press_released_actions or []
+        self._play_manager = play_manager
         self._attr_is_on = False
         self._long_press_task: asyncio.Task | None = None
         self._long_press_fired: bool = False
@@ -204,6 +551,9 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self.async_on_remove(
             self._entry.add_update_listener(self._async_config_updated)
         )
+        if self._play_manager is not None:
+            self._play_manager.register_entity(self)
+            self.async_on_remove(lambda: self._play_manager.unregister_entity(self))
 
         self.async_write_ha_state()
 
@@ -261,7 +611,19 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._long_press_actions = sw.get(CONF_LONG_PRESS_ACTIONS, [])
         self._long_press_released_actions = sw.get(CONF_LONG_PRESS_RELEASED_ACTIONS, [])
         self._attr_name = new_name
+        if self._play_manager is not None:
+            await self._play_manager.async_config_updated(entry.data)
         self.async_write_ha_state()
+
+    @property
+    def output_entity_ids(self) -> list[str]:
+        """Return primary output entities for this switch."""
+        return self._output_entity_ids
+
+    @property
+    def has_outputs(self) -> bool:
+        """Return True when this switch has output entities configured."""
+        return len(self._output_entity_ids) > 0
 
     def _get_long_press_outputs(self) -> list[str]:
         """Return the output entities to use for long press/hold actions.
@@ -285,6 +647,10 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             return
 
         is_on = new_state.state == STATE_ON
+        if self._play_manager is not None and self._play_manager.is_active:
+            if is_on:
+                self.hass.async_create_task(self._play_manager.async_handle_press(self))
+            return
 
         if is_on:
             self._press_count += 1
@@ -592,6 +958,18 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self.async_write_ha_state()
         await self._apply_outputs(False)
 
+    async def async_start_play_mode(self) -> None:
+        """Start play mode for this panel."""
+        if self._play_manager is None:
+            return
+        await self._play_manager.async_start_game()
+
+    async def async_stop_play_mode(self) -> None:
+        """Stop play mode for this panel."""
+        if self._play_manager is None:
+            return
+        await self._play_manager.async_stop_game()
+
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional state attributes."""
@@ -603,4 +981,19 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             "double_press_action": self._double_press_action,
             "double_press_output_entity_ids": self._double_press_output_entity_ids,
             "dim_auto_threshold": self._dim_auto_threshold,
+            "play_mode_enabled": (
+                self._play_manager.enabled if self._play_manager is not None else False
+            ),
+            "play_mode_active": (
+                self._play_manager.is_active if self._play_manager is not None else False
+            ),
+            "play_mode_rounds": (
+                self._play_manager.goal if self._play_manager is not None else 0
+            ),
+            "play_mode_score": (
+                self._play_manager.score if self._play_manager is not None else 0
+            ),
+            "play_mode_target_entity_id": (
+                self._play_manager.target_entity_id if self._play_manager is not None else None
+            ),
         }
