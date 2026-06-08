@@ -42,6 +42,7 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
    - **Switches to find** – game length (`2`, `5`, or `10` correct switches).
    - **Round timeout (seconds)** – optional countdown per target switch (`0` disables timeout).
    - **Delay between rounds (seconds)** – pause after each correct switch before the next target.
+   - **Play mode finished actions** – optional automation actions to run when play mode is completed. Useful for notifications to a phone or TV.
 4. **Step 2…N – Configure each switch input** (repeated for each switch):
    - **Name** – a friendly name for this individual switch (e.g. `Ceiling Light`).
    - **Sensor (input)** – the sensor entity whose state drives the outputs.
@@ -210,6 +211,7 @@ Gameplay behavior:
 - Incorrect press: round stays active; the target does not change.
 - Timeout (if configured): `switch_control_play_mode_round_timeout` is fired and a new target is selected.
 - Finish: when configured score goal (`2`, `5`, or `10`) is reached, all panel outputs are turned off.
+  The finish event includes `time_used` / `elapsed_time` (seconds) so notifications can include total game duration.
 
 Play mode events fired on the Home Assistant event bus:
 
@@ -220,6 +222,8 @@ Play mode events fired on the Home Assistant event bus:
 - `switch_control_play_mode_round_timeout`
 - `switch_control_play_mode_stopped`
 - `switch_control_play_mode_finished`
+
+When `switch_control_play_mode_finished` or `switch_control_play_mode_stopped` is fired, event data includes `elapsed_time` and `time_used` in seconds.
 
 ## License
 

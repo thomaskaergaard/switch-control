@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import time
 from typing import Any, Callable
 
 from homeassistant.components.switch import SwitchEntity
@@ -29,6 +30,7 @@ from .const import (
     CONF_NAME,
     CONF_OUTPUT_ENTITY_IDS,
     CONF_PLAY_MODE_ENABLED,
+    CONF_PLAY_MODE_FINISHED_ACTIONS,
     CONF_PLAY_MODE_ROUND_DELAY,
     CONF_PLAY_MODE_ROUND_TIMEOUT,
     CONF_PLAY_MODE_ROUNDS,
@@ -166,6 +168,7 @@ class PanelPlayModeManager:
         self._timeout_task: asyncio.Task | None = None
         self._next_round_task: asyncio.Task | None = None
         self._last_target_unique_id: str | None = None
+        self._started_at: float | None = None
         self._update_config(data)
 
     def _update_config(self, data: dict[str, Any]) -> None:
@@ -178,6 +181,7 @@ class PanelPlayModeManager:
         self._round_delay = int(
             data.get(CONF_PLAY_MODE_ROUND_DELAY, PLAY_MODE_DEFAULT_ROUND_DELAY)
         )
+        self._finished_actions: list[dict] = data.get(CONF_PLAY_MODE_FINISHED_ACTIONS, [])
 
     @property
     def is_active(self) -> bool:
@@ -238,6 +242,7 @@ class PanelPlayModeManager:
         self._attempts = 0
         self._target_entity = None
         self._last_target_unique_id = None
+        self._started_at = time.monotonic()
 
         self._hass.bus.async_fire(
             EVENT_PLAY_MODE_STARTED,
@@ -256,6 +261,7 @@ class PanelPlayModeManager:
         if not self._active:
             return
 
+        elapsed_time = self._get_elapsed_time()
         await self._cancel_internal_tasks()
         self._active = False
         self._target_entity = None
@@ -268,8 +274,11 @@ class PanelPlayModeManager:
                 "score": self._score,
                 "goal": self._goal,
                 "attempts": self._attempts,
+                "elapsed_time": elapsed_time,
+                "time_used": elapsed_time,
             },
         )
+        self._started_at = None
         self._async_write_entities_state()
 
     async def async_handle_press(self, pressed_entity: SwitchControlEntity) -> None:
@@ -402,6 +411,7 @@ class PanelPlayModeManager:
 
     async def _async_finish_game(self) -> None:
         """Finish game after reaching the configured goal."""
+        elapsed_time = self._get_elapsed_time()
         await self._cancel_internal_tasks()
         self._active = False
         await self._async_turn_off_all_outputs()
@@ -412,10 +422,60 @@ class PanelPlayModeManager:
                 "score": self._score,
                 "goal": self._goal,
                 "attempts": self._attempts,
+                "elapsed_time": elapsed_time,
+                "time_used": elapsed_time,
             },
         )
+        if self._finished_actions:
+            await self._run_finished_actions(
+                elapsed_time=elapsed_time,
+                score=self._score,
+                goal=self._goal,
+                attempts=self._attempts,
+            )
+        self._started_at = None
         self._target_entity = None
         self._async_write_entities_state()
+
+    def _get_elapsed_time(self) -> float:
+        """Return the elapsed play mode time in seconds."""
+        if self._started_at is None:
+            return 0.0
+        return round(max(0.0, time.monotonic() - self._started_at), 1)
+
+    async def _run_finished_actions(
+        self,
+        *,
+        elapsed_time: float,
+        score: int,
+        goal: int,
+        attempts: int,
+    ) -> None:
+        """Run configured actions for play mode finish."""
+        script = Script(
+            self._hass,
+            self._finished_actions,
+            f"{self._entry.title} play mode finished",
+            DOMAIN,
+        )
+        try:
+            await script.async_run(
+                {
+                    "entry_id": self._entry.entry_id,
+                    "score": score,
+                    "goal": goal,
+                    "attempts": attempts,
+                    "elapsed_time": elapsed_time,
+                    "time_used": elapsed_time,
+                }
+            )
+        except Exception:
+            _LOGGER.exception(
+                "Error running play mode finished actions for entry %s",
+                self._entry.entry_id,
+            )
+        finally:
+            await script.async_stop()
 
     async def _async_turn_off_all_outputs(self) -> None:
         """Turn off all outputs referenced by panel switch entities."""

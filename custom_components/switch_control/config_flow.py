@@ -38,6 +38,7 @@ from .const import (
     CONF_NAME,
     CONF_OUTPUT_ENTITY_IDS,
     CONF_PLAY_MODE_ENABLED,
+    CONF_PLAY_MODE_FINISHED_ACTIONS,
     CONF_PLAY_MODE_ROUND_DELAY,
     CONF_PLAY_MODE_ROUND_TIMEOUT,
     CONF_PLAY_MODE_ROUNDS,
@@ -105,6 +106,9 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
             self._data[CONF_PLAY_MODE_ROUND_DELAY] = int(
                 user_input.get(CONF_PLAY_MODE_ROUND_DELAY, PLAY_MODE_DEFAULT_ROUND_DELAY)
             )
+            self._data[CONF_PLAY_MODE_FINISHED_ACTIONS] = user_input.get(
+                CONF_PLAY_MODE_FINISHED_ACTIONS, []
+            )
             self._data[CONF_SWITCHES] = []
             self._current_switch = 1
             return await self.async_step_switch_detect()
@@ -154,6 +158,7 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                         mode=NumberSelectorMode.BOX,
                     )
                 ),
+                vol.Optional(CONF_PLAY_MODE_FINISHED_ACTIONS, default=[]): ActionSelector(),
             }
         )
 
@@ -487,6 +492,10 @@ class SwitchControlOptionsFlow(OptionsFlow):
                                 ),
                             )
                         ),
+                        CONF_PLAY_MODE_FINISHED_ACTIONS: user_input.get(
+                            CONF_PLAY_MODE_FINISHED_ACTIONS,
+                            self.config_entry.data.get(CONF_PLAY_MODE_FINISHED_ACTIONS, []),
+                        ),
                     },
                 )
                 return self.async_create_entry(title="", data={})
@@ -626,6 +635,10 @@ class SwitchControlOptionsFlow(OptionsFlow):
                         mode=NumberSelectorMode.BOX,
                     )
                 ),
+                vol.Optional(
+                    CONF_PLAY_MODE_FINISHED_ACTIONS,
+                    default=self.config_entry.data.get(CONF_PLAY_MODE_FINISHED_ACTIONS, []),
+                ): ActionSelector(),
             }
         )
 

@@ -23,6 +23,7 @@ CONF_PLAY_MODE_ENABLED = "play_mode_enabled"
 CONF_PLAY_MODE_ROUNDS = "play_mode_rounds"
 CONF_PLAY_MODE_ROUND_TIMEOUT = "play_mode_round_timeout"
 CONF_PLAY_MODE_ROUND_DELAY = "play_mode_round_delay"
+CONF_PLAY_MODE_FINISHED_ACTIONS = "play_mode_finished_actions"
 
 DEFAULT_NAME = "Switch Control"
 SWITCH_COUNT_OPTIONS = ["1", "2", "4"]
