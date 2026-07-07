@@ -19,6 +19,11 @@ CONF_RELEASED_ACTIONS = "released_actions"
 CONF_DOUBLE_PRESS_ACTIONS = "double_press_actions"
 CONF_LONG_PRESS_ACTIONS = "long_press_actions"
 CONF_LONG_PRESS_RELEASED_ACTIONS = "long_press_released_actions"
+CONF_PLAY_MODE_ENABLED = "play_mode_enabled"
+CONF_PLAY_MODE_ROUNDS = "play_mode_rounds"
+CONF_PLAY_MODE_ROUND_TIMEOUT = "play_mode_round_timeout"
+CONF_PLAY_MODE_ROUND_DELAY = "play_mode_round_delay"
+CONF_PLAY_MODE_FINISHED_ACTIONS = "play_mode_finished_actions"
 
 DEFAULT_NAME = "Switch Control"
 SWITCH_COUNT_OPTIONS = ["1", "2", "4"]
@@ -69,6 +74,13 @@ DOUBLE_PRESS_ACTION_OPTIONS = [
 # Interval in seconds at which the hold event is fired while the button is held
 HOLD_REPEAT_INTERVAL = 0.5
 
+# Play mode settings
+PLAY_MODE_ROUNDS_OPTIONS = ["2", "5", "10"]
+PLAY_MODE_DEFAULT_ENABLED = False
+PLAY_MODE_DEFAULT_ROUNDS = 5
+PLAY_MODE_DEFAULT_ROUND_TIMEOUT = 0
+PLAY_MODE_DEFAULT_ROUND_DELAY = 1
+
 # Home Assistant event names fired by this integration
 EVENT_BUTTON_PRESSED = f"{DOMAIN}_button_pressed"
 EVENT_BUTTON_RELEASED = f"{DOMAIN}_button_released"
@@ -76,3 +88,10 @@ EVENT_DOUBLE_PRESS = f"{DOMAIN}_double_press"
 EVENT_LONG_PRESS = f"{DOMAIN}_long_press"
 EVENT_LONG_PRESS_RELEASED = f"{DOMAIN}_long_press_released"
 EVENT_HOLD = f"{DOMAIN}_hold"
+EVENT_PLAY_MODE_STARTED = f"{DOMAIN}_play_mode_started"
+EVENT_PLAY_MODE_ROUND_STARTED = f"{DOMAIN}_play_mode_round_started"
+EVENT_PLAY_MODE_CORRECT_PRESS = f"{DOMAIN}_play_mode_correct_press"
+EVENT_PLAY_MODE_INCORRECT_PRESS = f"{DOMAIN}_play_mode_incorrect_press"
+EVENT_PLAY_MODE_ROUND_TIMEOUT = f"{DOMAIN}_play_mode_round_timeout"
+EVENT_PLAY_MODE_STOPPED = f"{DOMAIN}_play_mode_stopped"
+EVENT_PLAY_MODE_FINISHED = f"{DOMAIN}_play_mode_finished"

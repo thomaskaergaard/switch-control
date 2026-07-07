@@ -14,6 +14,7 @@ from homeassistant.core import Event, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
     ActionSelector,
+    BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
     NumberSelector,
@@ -36,6 +37,11 @@ from .const import (
     CONF_LONG_PRESS_RELEASED_ACTIONS,
     CONF_NAME,
     CONF_OUTPUT_ENTITY_IDS,
+    CONF_PLAY_MODE_ENABLED,
+    CONF_PLAY_MODE_FINISHED_ACTIONS,
+    CONF_PLAY_MODE_ROUND_DELAY,
+    CONF_PLAY_MODE_ROUND_TIMEOUT,
+    CONF_PLAY_MODE_ROUNDS,
     CONF_PRESS_ACTIONS,
     CONF_RELEASED_ACTIONS,
     CONF_SENSOR_ENTITY_ID,
@@ -48,6 +54,11 @@ from .const import (
     DOUBLE_PRESS_ACTION_OPTIONS,
     LONG_PRESS_ACTION_NONE,
     LONG_PRESS_ACTION_OPTIONS,
+    PLAY_MODE_DEFAULT_ENABLED,
+    PLAY_MODE_DEFAULT_ROUND_DELAY,
+    PLAY_MODE_DEFAULT_ROUNDS,
+    PLAY_MODE_DEFAULT_ROUND_TIMEOUT,
+    PLAY_MODE_ROUNDS_OPTIONS,
     SWITCH_COUNT_OPTIONS,
 )
 
@@ -81,6 +92,20 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
             self._data[CONF_NAME] = user_input[CONF_NAME]
             self._switch_count = int(user_input[CONF_SWITCH_COUNT])
             self._data[CONF_SWITCH_COUNT] = self._switch_count
+            self._data[CONF_PLAY_MODE_ENABLED] = user_input.get(
+                CONF_PLAY_MODE_ENABLED, PLAY_MODE_DEFAULT_ENABLED
+            )
+            self._data[CONF_PLAY_MODE_ROUNDS] = int(
+                user_input.get(CONF_PLAY_MODE_ROUNDS, PLAY_MODE_DEFAULT_ROUNDS)
+            )
+            self._data[CONF_PLAY_MODE_ROUND_TIMEOUT] = int(
+                user_input.get(
+                    CONF_PLAY_MODE_ROUND_TIMEOUT, PLAY_MODE_DEFAULT_ROUND_TIMEOUT
+                )
+            )
+            self._data[CONF_PLAY_MODE_ROUND_DELAY] = int(
+                user_input.get(CONF_PLAY_MODE_ROUND_DELAY, PLAY_MODE_DEFAULT_ROUND_DELAY)
+            )
             self._data[CONF_SWITCHES] = []
             self._current_switch = 1
             return await self.async_step_switch_detect()
@@ -92,6 +117,42 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                     SelectSelectorConfig(
                         options=SWITCH_COUNT_OPTIONS,
                         mode=SelectSelectorMode.LIST,
+                    )
+                ),
+                vol.Optional(
+                    CONF_PLAY_MODE_ENABLED, default=PLAY_MODE_DEFAULT_ENABLED
+                ): BooleanSelector(),
+                vol.Optional(
+                    CONF_PLAY_MODE_ROUNDS, default=str(PLAY_MODE_DEFAULT_ROUNDS)
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=PLAY_MODE_ROUNDS_OPTIONS,
+                        mode=SelectSelectorMode.LIST,
+                        translation_key=CONF_PLAY_MODE_ROUNDS,
+                    )
+                ),
+                vol.Optional(
+                    CONF_PLAY_MODE_ROUND_TIMEOUT,
+                    default=PLAY_MODE_DEFAULT_ROUND_TIMEOUT,
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=0,
+                        max=300,
+                        step=1,
+                        unit_of_measurement="s",
+                        mode=NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Optional(
+                    CONF_PLAY_MODE_ROUND_DELAY,
+                    default=PLAY_MODE_DEFAULT_ROUND_DELAY,
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=0,
+                        max=30,
+                        step=1,
+                        unit_of_measurement="s",
+                        mode=NumberSelectorMode.BOX,
                     )
                 ),
             }
@@ -304,15 +365,23 @@ class SwitchControlOptionsFlow(OptionsFlow):
     def __init__(self) -> None:
         """Initialize the options flow."""
         self._current_switch_index: int = 0
+        self._global_play_mode_finished_actions: list[dict] = []
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Show a selector for which switch input to reconfigure."""
         switches = self.config_entry.data.get(CONF_SWITCHES, [])
+        global_finished_actions = self.config_entry.data.get(
+            CONF_PLAY_MODE_FINISHED_ACTIONS, []
+        )
 
         if user_input is not None:
             self._current_switch_index = int(user_input["switch_index"])
+            self._global_play_mode_finished_actions = user_input.get(
+                CONF_PLAY_MODE_FINISHED_ACTIONS,
+                global_finished_actions,
+            )
             return await self.async_step_switch()
 
         options = [
@@ -328,6 +397,10 @@ class SwitchControlOptionsFlow(OptionsFlow):
                         mode=SelectSelectorMode.LIST,
                     )
                 ),
+                vol.Optional(
+                    CONF_PLAY_MODE_FINISHED_ACTIONS,
+                    default=global_finished_actions,
+                ): ActionSelector(),
             }
         )
 
@@ -392,8 +465,59 @@ class SwitchControlOptionsFlow(OptionsFlow):
                 }
                 self.hass.config_entries.async_update_entry(
                     self.config_entry,
-                    data={**self.config_entry.data, CONF_SWITCHES: switches},
+                    data={
+                        **self.config_entry.data,
+                        CONF_SWITCHES: switches,
+                        CONF_PLAY_MODE_ENABLED: user_input.get(
+                            CONF_PLAY_MODE_ENABLED,
+                            self.config_entry.data.get(
+                                CONF_PLAY_MODE_ENABLED, PLAY_MODE_DEFAULT_ENABLED
+                            ),
+                        ),
+                        CONF_PLAY_MODE_ROUNDS: int(
+                            user_input.get(
+                                CONF_PLAY_MODE_ROUNDS,
+                                self.config_entry.data.get(
+                                    CONF_PLAY_MODE_ROUNDS, PLAY_MODE_DEFAULT_ROUNDS
+                                ),
+                            )
+                        ),
+                        CONF_PLAY_MODE_ROUND_TIMEOUT: int(
+                            user_input.get(
+                                CONF_PLAY_MODE_ROUND_TIMEOUT,
+                                self.config_entry.data.get(
+                                    CONF_PLAY_MODE_ROUND_TIMEOUT,
+                                    PLAY_MODE_DEFAULT_ROUND_TIMEOUT,
+                                ),
+                            )
+                        ),
+                        CONF_PLAY_MODE_ROUND_DELAY: int(
+                            user_input.get(
+                                CONF_PLAY_MODE_ROUND_DELAY,
+                                self.config_entry.data.get(
+                                    CONF_PLAY_MODE_ROUND_DELAY,
+                                    PLAY_MODE_DEFAULT_ROUND_DELAY,
+                                ),
+                            )
+                        ),
+                        CONF_PLAY_MODE_FINISHED_ACTIONS: self._global_play_mode_finished_actions,
+                    },
                 )
+                for entry in self.hass.config_entries.async_entries(DOMAIN):
+                    if entry.entry_id == self.config_entry.entry_id:
+                        continue
+                    if (
+                        entry.data.get(CONF_PLAY_MODE_FINISHED_ACTIONS, [])
+                        == self._global_play_mode_finished_actions
+                    ):
+                        continue
+                    self.hass.config_entries.async_update_entry(
+                        entry,
+                        data={
+                            **entry.data,
+                            CONF_PLAY_MODE_FINISHED_ACTIONS: self._global_play_mode_finished_actions,
+                        },
+                    )
                 return self.async_create_entry(title="", data={})
 
         schema = vol.Schema(
@@ -483,6 +607,54 @@ class SwitchControlOptionsFlow(OptionsFlow):
                     CONF_LONG_PRESS_RELEASED_ACTIONS,
                     default=current.get(CONF_LONG_PRESS_RELEASED_ACTIONS, []),
                 ): ActionSelector(),
+                vol.Optional(
+                    CONF_PLAY_MODE_ENABLED,
+                    default=self.config_entry.data.get(
+                        CONF_PLAY_MODE_ENABLED, PLAY_MODE_DEFAULT_ENABLED
+                    ),
+                ): BooleanSelector(),
+                vol.Optional(
+                    CONF_PLAY_MODE_ROUNDS,
+                    default=str(
+                        self.config_entry.data.get(
+                            CONF_PLAY_MODE_ROUNDS, PLAY_MODE_DEFAULT_ROUNDS
+                        )
+                    ),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=PLAY_MODE_ROUNDS_OPTIONS,
+                        mode=SelectSelectorMode.LIST,
+                        translation_key=CONF_PLAY_MODE_ROUNDS,
+                    )
+                ),
+                vol.Optional(
+                    CONF_PLAY_MODE_ROUND_TIMEOUT,
+                    default=self.config_entry.data.get(
+                        CONF_PLAY_MODE_ROUND_TIMEOUT, PLAY_MODE_DEFAULT_ROUND_TIMEOUT
+                    ),
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=0,
+                        max=300,
+                        step=1,
+                        unit_of_measurement="s",
+                        mode=NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Optional(
+                    CONF_PLAY_MODE_ROUND_DELAY,
+                    default=self.config_entry.data.get(
+                        CONF_PLAY_MODE_ROUND_DELAY, PLAY_MODE_DEFAULT_ROUND_DELAY
+                    ),
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=0,
+                        max=30,
+                        step=1,
+                        unit_of_measurement="s",
+                        mode=NumberSelectorMode.BOX,
+                    )
+                ),
             }
         )
 

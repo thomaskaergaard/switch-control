@@ -6,10 +6,18 @@
         "description": "Choose a name for this panel and how many independent switch inputs it should have.",
         "data": {
           "name": "Name",
-          "switch_count": "Number of switches"
+          "switch_count": "Number of switches",
+          "play_mode_enabled": "Enable play mode",
+          "play_mode_rounds": "Switches to find",
+          "play_mode_round_timeout": "Round timeout (seconds)",
+          "play_mode_round_delay": "Delay between rounds (seconds)"
         },
         "data_description": {
-          "switch_count": "Each switch input controls its own set of output entities."
+          "switch_count": "Each switch input controls its own set of output entities.",
+          "play_mode_enabled": "When enabled, you can start a switch-finding game for this panel.",
+          "play_mode_rounds": "How many correct switches the player must find to finish the game.",
+          "play_mode_round_timeout": "Optional countdown per target switch. Set 0 to disable timeout.",
+          "play_mode_round_delay": "Pause between successful rounds before the next target is shown."
         }
       },
       "switch_detect": {
@@ -32,7 +40,12 @@
           "released_actions": "Released actions",
           "double_press_actions": "Double press actions",
           "long_press_actions": "Long press actions",
-          "long_press_released_actions": "Long press released actions"
+          "long_press_released_actions": "Long press released actions",
+          "play_mode_enabled": "Enable play mode",
+          "play_mode_rounds": "Switches to find",
+          "play_mode_round_timeout": "Round timeout (seconds)",
+          "play_mode_round_delay": "Delay between rounds (seconds)",
+          "play_mode_finished_actions": "Play mode finished actions"
         },
         "data_description": {
           "sensor_entity_id": "The sensor whose state (on/off) will control the outputs.",
@@ -46,7 +59,12 @@
           "released_actions": "Automation actions to run each time the button is released (fires with the switch_control_button_released event).",
           "double_press_actions": "Automation actions to run when a double press is detected (fires with the switch_control_double_press event).",
           "long_press_actions": "Automation actions to run when a long press is detected after 0.5 s (fires with the switch_control_long_press event).",
-          "long_press_released_actions": "Automation actions to run when the button is released after a long press (fires with the switch_control_long_press_released event)."
+          "long_press_released_actions": "Automation actions to run when the button is released after a long press (fires with the switch_control_long_press_released event).",
+          "play_mode_enabled": "When enabled, you can start a switch-finding game for this panel.",
+          "play_mode_rounds": "How many correct switches the player must find to finish the game.",
+          "play_mode_round_timeout": "Optional countdown per target switch. Set 0 to disable timeout.",
+          "play_mode_round_delay": "Pause between successful rounds before the next target is shown.",
+          "play_mode_finished_actions": "Automation actions to run when play mode finishes successfully. Actions receive variables including time_used/elapsed_time, score, goal, and attempts."
         }
       }
     },
@@ -67,7 +85,11 @@
         "title": "Reconfigure Switch Control",
         "description": "Select the switch input you want to reconfigure.",
         "data": {
-          "switch_index": "Switch"
+          "switch_index": "Switch",
+          "play_mode_finished_actions": "Play mode finished actions (global)"
+        },
+        "data_description": {
+          "play_mode_finished_actions": "Automation actions to run when play mode finishes successfully across all panels. Actions receive variables including time_used/elapsed_time, score, goal, and attempts."
         }
       },
       "switch": {
@@ -127,6 +149,13 @@
         "turn_on": "Turn on",
         "turn_off": "Turn off",
         "toggle": "Toggle"
+      }
+    },
+    "play_mode_rounds": {
+      "options": {
+        "2": "2 switches",
+        "5": "5 switches",
+        "10": "10 switches"
       }
     }
   }

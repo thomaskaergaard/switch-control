@@ -11,6 +11,7 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
 - **Toggle on press** — a momentary press (sensor briefly on then off) toggles the output state. The first press turns outputs on; the next press turns them off.
 - **Double press detection** — two presses within 0.4 seconds fire a `switch_control_double_press` event and can optionally apply a built-in action to the output entities.
 - **Long press detection** — holding the input for 0.5 s or longer fires Home Assistant bus events that you can trigger automations from (e.g. dimming a light).
+- **Play mode** — an integration-wide game mode that can target switches across all panels with play mode enabled.
 - All virtual switch entities belonging to the same panel are **grouped under a single device** in the Home Assistant device registry for a cleaner UI.
 - The controller exposes one virtual switch entity per input, so you can also toggle each one manually from the UI or automations.
 - Fully configurable through the Home Assistant UI (no YAML required).
@@ -37,6 +38,10 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
 3. **Step 1 – Panel setup:**
    - **Name** – a friendly name for this panel (e.g. `Living Room Panel`).
    - **Number of switches** – choose **1**, **2**, or **4** depending on how many independent inputs the panel has.
+   - **Enable play mode** – enables panel game mode and related services/events.
+   - **Switches to find** – game length (`2`, `5`, or `10` correct switches).
+   - **Round timeout (seconds)** – optional countdown per target switch (`0` disables timeout).
+   - **Delay between rounds (seconds)** – pause after each correct switch before the next target.
 4. **Step 2…N – Configure each switch input** (repeated for each switch):
    - **Name** – a friendly name for this individual switch (e.g. `Ceiling Light`).
    - **Sensor (input)** – the sensor entity whose state drives the outputs.
@@ -52,6 +57,8 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
    - **Long press actions** – optional automation actions to run when a long press is detected after 0.5 s.
    - **Long press released actions** – optional automation actions to run when the button is released after a long press.
 5. Click **Submit** on each step.
+
+To configure **Play mode finished actions** globally (shared across all panels), open any Switch Control entry, go to **Configure**, and set it in the first options step.
 
 One virtual switch entity is created for every configured input (e.g. `switch.ceiling_light`, `switch.floor_lamp`). Each entity's state mirrors its own sensor and controls its own set of outputs simultaneously. All entities for the same panel are grouped under a single device.
 
@@ -184,6 +191,40 @@ Example: activate a scene on double press and send a notification on long press,
 Inline actions run **in addition to** any built-in action (e.g. a configured long press action that dims a light). Events are always fired regardless of these settings, so you can mix inline actions with traditional YAML automations freely.
 
 Each virtual switch can also be toggled manually, independently of the sensor, allowing full manual override per channel.
+
+### Play mode
+
+Play mode runs across all enabled panels and can be started or stopped through entity services on any switch entity:
+
+- `switch.start_play_mode`
+- `switch.stop_play_mode`
+
+When started, the integration:
+
+1. Turns off all outputs related to enabled play mode switches in the active game.
+2. Randomly selects one switch as the active target.
+3. Turns on only that target switch's press outputs.
+4. Waits for the player to press the correct physical switch.
+
+Gameplay behavior:
+
+- Correct press: score increases and the next target starts (after configured delay).
+- Incorrect press: round stays active; the target does not change.
+- Timeout (if configured): `switch_control_play_mode_round_timeout` is fired and a new target is selected.
+- Finish: when configured score goal (`2`, `5`, or `10`) is reached, all game outputs are turned off.
+  The finish event includes `time_used` / `elapsed_time` (seconds) so notifications can include total game duration.
+
+Play mode events fired on the Home Assistant event bus:
+
+- `switch_control_play_mode_started`
+- `switch_control_play_mode_round_started`
+- `switch_control_play_mode_correct_press`
+- `switch_control_play_mode_incorrect_press`
+- `switch_control_play_mode_round_timeout`
+- `switch_control_play_mode_stopped`
+- `switch_control_play_mode_finished`
+
+When `switch_control_play_mode_finished` or `switch_control_play_mode_stopped` is fired, event data includes `elapsed_time` and `time_used` in seconds.
 
 ## License
 
