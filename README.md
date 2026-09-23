@@ -82,6 +82,13 @@ When the sensor is triggered a second time within **0.4 seconds of the first rel
 
 To avoid triggering a single-press action when a double press is intended, the output toggle for a single press is **deferred** until 0.4 seconds after the first release (the double-press detection window). If a second press arrives within that window, the pending single-press toggle is cancelled and the double-press action fires instead. If no second press arrives within 0.4 seconds of the first release, the single-press toggle is applied normally.
 
+The deferral only happens when a double press actually does something, i.e. a **Double press action** other than `None` or **Double press actions** are configured. Otherwise there is nothing to tell a single press apart from, so the toggle is applied without delay:
+
+- **No long press configured either** – the outputs toggle the moment the button is pressed.
+- **A long press is configured** – the outputs toggle the moment a short press is released (a press can only be known to be short once it is released).
+
+The double-press window still runs in both cases, so the `switch_control_double_press` event keeps firing; the second press does not toggle the outputs again.
+
 When no double press action is configured (`None`), only the `switch_control_double_press` event is fired and the outputs are left unchanged.
 
 ### Long press and hold

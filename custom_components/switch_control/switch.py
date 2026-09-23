@@ -657,6 +657,9 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._double_press_window_task: asyncio.Task | None = None
         self._remove_sensor_listener: Callable[[], None] | None = None
         self._pre_press_state: bool = False
+        # True once the single-press toggle for the current press cycle has
+        # been applied early (see _apply_single_press_now).
+        self._single_press_applied: bool = False
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -790,6 +793,34 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         """
         return self._double_press_output_entity_ids or self._output_entity_ids
 
+    def _has_double_press(self) -> bool:
+        """Return True when a double press changes outputs or runs actions."""
+        return (
+            self._double_press_action != DOUBLE_PRESS_ACTION_NONE
+            or bool(self._double_press_actions)
+        )
+
+    def _has_long_press(self) -> bool:
+        """Return True when a long press changes outputs or runs actions."""
+        return (
+            self._long_press_action != LONG_PRESS_ACTION_NONE
+            or bool(self._long_press_actions)
+            or bool(self._long_press_released_actions)
+        )
+
+    def _apply_single_press_now(self) -> None:
+        """Apply the single-press toggle without waiting for the double-press window.
+
+        Used when a double press would not do anything but fire its event, so
+        there is nothing to disambiguate the single press from.  The window
+        still runs afterwards so the double-press event keeps firing; it then
+        skips the toggle.
+        """
+        self._single_press_applied = True
+        self._attr_is_on = not self._pre_press_state
+        self.async_write_ha_state()
+        self.hass.async_create_task(self._apply_outputs(self._attr_is_on))
+
     @callback
     def _handle_sensor_state_change(self, event: Any) -> None:
         """Handle sensor state changes and propagate to outputs."""
@@ -812,6 +843,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                 # prevents a single-press action from firing when the user is
                 # actually performing a double press.
                 self._long_press_fired = False
+                self._single_press_applied = False
                 self._pre_press_state = self._attr_is_on
 
                 # Notify listeners that the button was pressed
@@ -826,10 +858,18 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                         self._run_actions(self._press_actions, "press")
                     )
 
-                # Start long-press detection
-                self._long_press_task = self.hass.async_create_task(
-                    self._detect_long_press()
+                # Start long-press detection.  A background task: it loops for
+                # as long as the button is held, and must not hold up Home
+                # Assistant's startup.
+                self._long_press_task = self.hass.async_create_background_task(
+                    self._detect_long_press(),
+                    f"switch_control long press {self.entity_id}",
                 )
+
+                # With no double or long press to tell apart, toggle on press
+                # rather than on release.
+                if not self._has_double_press() and not self._has_long_press():
+                    self._apply_single_press_now()
 
                 # The double-press detection window is started on the first
                 # RELEASE (see the release handler below) so that the 0.4 s
@@ -908,6 +948,10 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                 # instead of being treated as a (spurious) second press.
                 self._press_count = 0
             elif self._press_count == 1:
+                # Without a double press configured, toggle on release rather
+                # than after the window (a no-op if already toggled on press).
+                if not self._has_double_press() and not self._single_press_applied:
+                    self._apply_single_press_now()
                 # Short first press released — start the double-press detection
                 # window.  If a second press arrives within DOUBLE_PRESS_THRESHOLD
                 # seconds the window task is cancelled and the double-press action
@@ -943,6 +987,8 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         # outputs are being applied is treated as a fresh first press, not as
         # a (spurious) double-press with already-modified state.
         self._press_count = 0
+        if self._single_press_applied:
+            return
         self._attr_is_on = not self._pre_press_state
         self.async_write_ha_state()
         await self._apply_outputs(self._attr_is_on)
