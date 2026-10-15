@@ -656,6 +656,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._press_count: int = 0
         self._double_press_window_task: asyncio.Task | None = None
         self._remove_sensor_listener: Callable[[], None] | None = None
+        self._remove_output_listener: Callable[[], None] | None = None
         self._pre_press_state: bool = False
         # True once the single-press toggle for the current press cycle has
         # been applied early (see _apply_single_press_now).
@@ -701,6 +702,12 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         )
         self.async_on_remove(self._cleanup_sensor_listener)
 
+        # Follow the outputs, so the switch shows (and toggles from) what the
+        # lights actually are when they are changed from elsewhere.
+        self._track_outputs()
+        self.async_on_remove(self._cleanup_output_listener)
+        self._sync_from_outputs()
+
         # Listen for config entry changes and update settings in-place
         self.async_on_remove(
             self._entry.add_update_listener(self._async_config_updated)
@@ -716,6 +723,56 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         if self._remove_sensor_listener is not None:
             self._remove_sensor_listener()
             self._remove_sensor_listener = None
+
+    def _track_outputs(self) -> None:
+        """(Re)register the listener on the primary output entities."""
+        self._cleanup_output_listener()
+        if self._output_entity_ids:
+            self._remove_output_listener = async_track_state_change_event(
+                self.hass,
+                list(self._output_entity_ids),
+                self._handle_output_state_change,
+            )
+
+    def _cleanup_output_listener(self) -> None:
+        """Cancel the output state-change listener."""
+        if self._remove_output_listener is not None:
+            self._remove_output_listener()
+            self._remove_output_listener = None
+
+    def _outputs_on(self) -> bool | None:
+        """Return whether any primary output is on.
+
+        Returns None when no output reports a usable on/off state (none
+        configured, or all unavailable/unknown), so callers can fall back to
+        the switch's own remembered state.
+        """
+        known = False
+        for entity_id in self._output_entity_ids:
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state not in (STATE_ON, STATE_OFF):
+                continue
+            if state.state == STATE_ON:
+                return True
+            known = True
+        return False if known else None
+
+    def _current_state(self) -> bool:
+        """Return the state to toggle from: the outputs' real state if known."""
+        outputs_on = self._outputs_on()
+        return self._attr_is_on if outputs_on is None else outputs_on
+
+    def _sync_from_outputs(self) -> None:
+        """Set the switch state from the outputs, when they report one."""
+        outputs_on = self._outputs_on()
+        if outputs_on is not None and outputs_on != self._attr_is_on:
+            self._attr_is_on = outputs_on
+            self.async_write_ha_state()
+
+    @callback
+    def _handle_output_state_change(self, event: Any) -> None:
+        """Keep the switch state in step with outputs changed from elsewhere."""
+        self._sync_from_outputs()
 
     def _get_switch_config(self, data: dict[str, Any]) -> dict[str, Any] | None:
         """Return the config dict for this entity from entry data, or None if unavailable."""
@@ -753,7 +810,10 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                 self._handle_sensor_state_change,
             )
 
-        self._output_entity_ids = new_outputs
+        if new_outputs != self._output_entity_ids:
+            self._output_entity_ids = new_outputs
+            self._track_outputs()
+            self._sync_from_outputs()
         self._long_press_action = new_long
         self._long_press_output_entity_ids = new_long_outputs
         self._double_press_action = new_double
@@ -844,7 +904,10 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                 # actually performing a double press.
                 self._long_press_fired = False
                 self._single_press_applied = False
-                self._pre_press_state = self._attr_is_on
+                # Toggle from what the outputs actually are, not from the last
+                # state this switch set: another panel, the app or an
+                # automation may have changed them since.
+                self._pre_press_state = self._current_state()
 
                 # Notify listeners that the button was pressed
                 self.hass.bus.async_fire(

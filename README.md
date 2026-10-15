@@ -73,6 +73,8 @@ A momentary press fires the sensor briefly (`on` → `off`). Instead of mirrorin
 | 1st press | `off` | `on` | all turned **on** |
 | 2nd press | `on` | `off` | all turned **off** |
 
+The toggle starts from what the outputs **actually are**, not from the last state the switch set. If any output is on, a press turns them all off; if all are off, it turns them on. So a press always works the first time, even after the lights were changed from another panel, the app, a dashboard or an automation. The virtual switch follows its outputs the same way. Outputs that are `unavailable` or `unknown` are ignored; if none report a state, the switch falls back to its own last state.
+
 ### Double press
 
 When the sensor is triggered a second time within **0.4 seconds of the first release**, the integration detects a double press:
