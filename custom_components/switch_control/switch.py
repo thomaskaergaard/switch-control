@@ -658,6 +658,10 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._remove_sensor_listener: Callable[[], None] | None = None
         self._remove_output_listener: Callable[[], None] | None = None
         self._pre_press_state: bool = False
+        # Pre-press state of the double/long press outputs, which may be a
+        # different set of entities than the single-press outputs.
+        self._pre_press_double_state: bool = False
+        self._pre_press_long_state: bool = False
         # True once the single-press toggle for the current press cycle has
         # been applied early (see _apply_single_press_now).
         self._single_press_applied: bool = False
@@ -740,15 +744,15 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             self._remove_output_listener()
             self._remove_output_listener = None
 
-    def _outputs_on(self) -> bool | None:
-        """Return whether any primary output is on.
+    def _outputs_on(self, entity_ids: list[str] | None = None) -> bool | None:
+        """Return whether any of ``entity_ids`` (default: the primary outputs) is on.
 
         Returns None when no output reports a usable on/off state (none
         configured, or all unavailable/unknown), so callers can fall back to
         the switch's own remembered state.
         """
         known = False
-        for entity_id in self._output_entity_ids:
+        for entity_id in entity_ids if entity_ids is not None else self._output_entity_ids:
             state = self.hass.states.get(entity_id)
             if state is None or state.state not in (STATE_ON, STATE_OFF):
                 continue
@@ -757,10 +761,21 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             known = True
         return False if known else None
 
-    def _current_state(self) -> bool:
-        """Return the state to toggle from: the outputs' real state if known."""
-        outputs_on = self._outputs_on()
-        return self._attr_is_on if outputs_on is None else outputs_on
+    def _current_state(self, entity_ids: list[str] | None = None) -> bool:
+        """Return the state to toggle from: the outputs' real state if known.
+
+        For the primary outputs the fallback is the switch's own state; for a
+        dedicated double/long press list (whose state the switch doesn't
+        track) it is off.
+        """
+        outputs_on = self._outputs_on(entity_ids)
+        if outputs_on is not None:
+            return outputs_on
+        return self._attr_is_on if entity_ids is None or entity_ids == self._output_entity_ids else False
+
+    def _is_primary(self, entity_ids: list[str]) -> bool:
+        """True when ``entity_ids`` are the primary outputs, which the switch mirrors."""
+        return entity_ids == self._output_entity_ids
 
     def _sync_from_outputs(self) -> None:
         """Set the switch state from the outputs, when they report one."""
@@ -908,6 +923,10 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                 # state this switch set: another panel, the app or an
                 # automation may have changed them since.
                 self._pre_press_state = self._current_state()
+                # Double/long press toggle their own outputs, so they toggle
+                # from those outputs' state, not the single-press outputs'.
+                self._pre_press_double_state = self._current_state(self._get_double_press_outputs())
+                self._pre_press_long_state = self._current_state(self._get_long_press_outputs())
 
                 # Notify listeners that the button was pressed
                 self.hass.bus.async_fire(
@@ -1106,19 +1125,12 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             )
 
         if self._long_press_action == LONG_PRESS_ACTION_TURN_ON:
-            self._attr_is_on = True
-            await self._apply_outputs(True, self._get_long_press_outputs())
-            self.async_write_ha_state()
+            await self._apply_action_target(True, self._get_long_press_outputs())
         elif self._long_press_action == LONG_PRESS_ACTION_TURN_OFF:
-            self._attr_is_on = False
-            await self._apply_outputs(False, self._get_long_press_outputs())
-            self.async_write_ha_state()
+            await self._apply_action_target(False, self._get_long_press_outputs())
         elif self._long_press_action == LONG_PRESS_ACTION_TOGGLE:
-            # Toggle from the state before the first press.
-            target = not self._pre_press_state
-            self._attr_is_on = target
-            await self._apply_outputs(target, self._get_long_press_outputs())
-            self.async_write_ha_state()
+            # Toggle the long press outputs from their own state before the press.
+            await self._apply_action_target(not self._pre_press_long_state, self._get_long_press_outputs())
         elif self._long_press_action in (LONG_PRESS_ACTION_DIM_UP, LONG_PRESS_ACTION_DIM_DOWN, LONG_PRESS_ACTION_DIM_AUTO):
             self._dim_task = self.hass.async_create_task(self._apply_dim_loop())
 
@@ -1175,19 +1187,23 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
     async def _apply_double_press_action(self) -> None:
         """Apply the configured double-press action to all output entities."""
         if self._double_press_action == DOUBLE_PRESS_ACTION_TURN_ON:
-            self._attr_is_on = True
-            await self._apply_outputs(True, self._get_double_press_outputs())
-            self.async_write_ha_state()
+            await self._apply_action_target(True, self._get_double_press_outputs())
         elif self._double_press_action == DOUBLE_PRESS_ACTION_TURN_OFF:
-            self._attr_is_on = False
-            await self._apply_outputs(False, self._get_double_press_outputs())
-            self.async_write_ha_state()
+            await self._apply_action_target(False, self._get_double_press_outputs())
         elif self._double_press_action == DOUBLE_PRESS_ACTION_TOGGLE:
-            # Toggle from the state that was active before the first press.
-            target = not self._pre_press_state
-            self._attr_is_on = target
-            await self._apply_outputs(target, self._get_double_press_outputs())
+            # Toggle the double press outputs from their own state before the press.
+            await self._apply_action_target(not self._pre_press_double_state, self._get_double_press_outputs())
+
+    async def _apply_action_target(self, turn_on: bool, entity_ids: list[str]) -> None:
+        """Switch a double/long press output list, updating the switch only for its own outputs.
+
+        The switch mirrors its primary outputs; a dedicated double/long press list
+        is a different set of entities, so it must not change the switch state.
+        """
+        if self._is_primary(entity_ids):
+            self._attr_is_on = turn_on
             self.async_write_ha_state()
+        await self._apply_outputs(turn_on, entity_ids)
 
     async def _apply_outputs(self, turn_on: bool, entity_ids: list[str] | None = None) -> None:
         """Turn output entities on or off.
