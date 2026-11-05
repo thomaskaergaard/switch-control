@@ -44,6 +44,7 @@ LONG_PRESS_ACTION_TOGGLE = "toggle"
 LONG_PRESS_ACTION_DIM_UP = "dim_up"
 LONG_PRESS_ACTION_DIM_DOWN = "dim_down"
 LONG_PRESS_ACTION_DIM_AUTO = "dim_auto"
+LONG_PRESS_ACTION_COVER_MOVE = "cover_move"
 LONG_PRESS_ACTION_OPTIONS = [
     LONG_PRESS_ACTION_NONE,
     LONG_PRESS_ACTION_TURN_ON,
@@ -52,6 +53,7 @@ LONG_PRESS_ACTION_OPTIONS = [
     LONG_PRESS_ACTION_DIM_UP,
     LONG_PRESS_ACTION_DIM_DOWN,
     LONG_PRESS_ACTION_DIM_AUTO,
+    LONG_PRESS_ACTION_COVER_MOVE,
 ]
 
 # Dimming settings for dim_up / dim_down / dim_auto long press actions
@@ -95,3 +97,7 @@ EVENT_PLAY_MODE_INCORRECT_PRESS = f"{DOMAIN}_play_mode_incorrect_press"
 EVENT_PLAY_MODE_ROUND_TIMEOUT = f"{DOMAIN}_play_mode_round_timeout"
 EVENT_PLAY_MODE_STOPPED = f"{DOMAIN}_play_mode_stopped"
 EVENT_PLAY_MODE_FINISHED = f"{DOMAIN}_play_mode_finished"
+
+# Entity domains a button can control. Covers (blinds) are stepped open/stop/close
+# by a press instead of being switched on and off.
+OUTPUT_DOMAINS = ["switch", "light", "cover"]

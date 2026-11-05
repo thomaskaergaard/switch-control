@@ -54,6 +54,7 @@ from .const import (
     DOUBLE_PRESS_ACTION_OPTIONS,
     LONG_PRESS_ACTION_NONE,
     LONG_PRESS_ACTION_OPTIONS,
+    OUTPUT_DOMAINS,
     PLAY_MODE_DEFAULT_ENABLED,
     PLAY_MODE_DEFAULT_ROUND_DELAY,
     PLAY_MODE_DEFAULT_ROUNDS,
@@ -295,7 +296,7 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                 ),
                 vol.Optional(CONF_OUTPUT_ENTITY_IDS, default=[]): EntitySelector(
                     EntitySelectorConfig(
-                        domain=["switch", "light"],
+                        domain=OUTPUT_DOMAINS,
                         multiple=True,
                     )
                 ),
@@ -310,7 +311,7 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                 ),
                 vol.Optional(CONF_LONG_PRESS_OUTPUT_ENTITY_IDS, default=[]): EntitySelector(
                     EntitySelectorConfig(
-                        domain=["switch", "light"],
+                        domain=OUTPUT_DOMAINS,
                         multiple=True,
                     )
                 ),
@@ -336,7 +337,7 @@ class SwitchControlConfigFlow(ConfigFlow, domain=DOMAIN):
                 ),
                 vol.Optional(CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, default=[]): EntitySelector(
                     EntitySelectorConfig(
-                        domain=["switch", "light"],
+                        domain=OUTPUT_DOMAINS,
                         multiple=True,
                     )
                 ),
@@ -533,7 +534,7 @@ class SwitchControlOptionsFlow(OptionsFlow):
                     default=current.get(CONF_OUTPUT_ENTITY_IDS, []),
                 ): EntitySelector(
                     EntitySelectorConfig(
-                        domain=["switch", "light"],
+                        domain=OUTPUT_DOMAINS,
                         multiple=True,
                     )
                 ),
@@ -552,7 +553,7 @@ class SwitchControlOptionsFlow(OptionsFlow):
                     default=current.get(CONF_LONG_PRESS_OUTPUT_ENTITY_IDS, []),
                 ): EntitySelector(
                     EntitySelectorConfig(
-                        domain=["switch", "light"],
+                        domain=OUTPUT_DOMAINS,
                         multiple=True,
                     )
                 ),
@@ -583,7 +584,7 @@ class SwitchControlOptionsFlow(OptionsFlow):
                     default=current.get(CONF_DOUBLE_PRESS_OUTPUT_ENTITY_IDS, []),
                 ): EntitySelector(
                     EntitySelectorConfig(
-                        domain=["switch", "light"],
+                        domain=OUTPUT_DOMAINS,
                         multiple=True,
                     )
                 ),

@@ -140,7 +140,8 @@
         "toggle": "Toggle",
         "dim_up": "Dim up (increase brightness while held)",
         "dim_down": "Dim down (decrease brightness while held)",
-        "dim_auto": "Dim auto (dim up or down based on current brightness)"
+        "dim_auto": "Dim auto (dim up or down based on current brightness)",
+        "cover_move": "Move blind while held (stops on release)"
       }
     },
     "double_press_action": {

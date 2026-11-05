@@ -61,6 +61,7 @@ from .const import (
     EVENT_PLAY_MODE_STARTED,
     EVENT_PLAY_MODE_STOPPED,
     HOLD_REPEAT_INTERVAL,
+    LONG_PRESS_ACTION_COVER_MOVE,
     LONG_PRESS_ACTION_DIM_AUTO,
     LONG_PRESS_ACTION_DIM_DOWN,
     LONG_PRESS_ACTION_DIM_UP,
@@ -76,6 +77,20 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Cover states and the stop feature bit (CoverEntityFeature.STOP), kept local so
+# the integration doesn't depend on the cover component being loaded.
+COVER_OPEN = "open"
+COVER_CLOSED = "closed"
+COVER_OPENING = "opening"
+COVER_CLOSING = "closing"
+COVER_SUPPORT_STOP = 8
+COVER_AS_ON_OFF = {
+    COVER_OPEN: STATE_ON,
+    COVER_OPENING: STATE_ON,
+    COVER_CLOSED: STATE_OFF,
+    COVER_CLOSING: STATE_OFF,
+}
 
 
 async def async_setup_entry(
@@ -566,6 +581,8 @@ class PanelPlayModeManager:
         service = "turn_on" if turn_on else "turn_off"
         for entity_id in entity_ids:
             domain = entity_id.split(".")[0]
+            if domain == "cover":
+                continue  # the game flashes lights; it doesn't run blinds up and down
             await self._hass.services.async_call(
                 domain,
                 service,
@@ -665,6 +682,11 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         # True once the single-press toggle for the current press cycle has
         # been applied early (see _apply_single_press_now).
         self._single_press_applied: bool = False
+        # Covers: the direction each one last moved ("open"/"close"), so a press
+        # on a part-open blind goes the other way, as on a one-button blind switch.
+        self._cover_direction: dict[str, str] = {}
+        # Covers set moving by a "move while held" long press, stopped on release.
+        self._covers_held: list[str] = []
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -754,9 +776,13 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         known = False
         for entity_id in entity_ids if entity_ids is not None else self._output_entity_ids:
             state = self.hass.states.get(entity_id)
-            if state is None or state.state not in (STATE_ON, STATE_OFF):
+            if state is None:
                 continue
-            if state.state == STATE_ON:
+            # A blind counts as on while open (or opening), off while closed.
+            value = COVER_AS_ON_OFF.get(state.state, state.state)
+            if value not in (STATE_ON, STATE_OFF):
+                continue
+            if value == STATE_ON:
                 return True
             known = True
         return False if known else None
@@ -787,6 +813,12 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
     @callback
     def _handle_output_state_change(self, event: Any) -> None:
         """Keep the switch state in step with outputs changed from elsewhere."""
+        new_state = event.data.get("new_state")
+        if new_state is not None and new_state.state in (COVER_OPENING, COVER_CLOSING):
+            # Moved from the app or a remote: the next press goes the other way.
+            self._cover_direction[new_state.entity_id] = (
+                "open" if new_state.state == COVER_OPENING else "close"
+            )
         self._sync_from_outputs()
 
     def _get_switch_config(self, data: dict[str, Any]) -> dict[str, Any] | None:
@@ -894,7 +926,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         self._single_press_applied = True
         self._attr_is_on = not self._pre_press_state
         self.async_write_ha_state()
-        self.hass.async_create_task(self._apply_outputs(self._attr_is_on))
+        self.hass.async_create_task(self._apply_outputs(self._attr_is_on, toggle=True))
 
     @callback
     def _handle_sensor_state_change(self, event: Any) -> None:
@@ -1014,6 +1046,11 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
                 self.hass.async_create_task(self._await_cancel(self._dim_task))
             self._dim_task = None
 
+            # A blind moved by "move while held" stops when the button is let go.
+            if self._covers_held:
+                held, self._covers_held = self._covers_held, []
+                self.hass.async_create_task(self._stop_covers(held))
+
             # If a long press was active, fire the release event
             if self._long_press_fired:
                 self.hass.bus.async_fire(
@@ -1073,7 +1110,7 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             return
         self._attr_is_on = not self._pre_press_state
         self.async_write_ha_state()
-        await self._apply_outputs(self._attr_is_on)
+        await self._apply_outputs(self._attr_is_on, toggle=True)
 
     async def _run_actions(self, actions: list[dict], label: str) -> None:
         """Execute a sequence of Home Assistant automation actions.
@@ -1130,7 +1167,11 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             await self._apply_action_target(False, self._get_long_press_outputs())
         elif self._long_press_action == LONG_PRESS_ACTION_TOGGLE:
             # Toggle the long press outputs from their own state before the press.
-            await self._apply_action_target(not self._pre_press_long_state, self._get_long_press_outputs())
+            await self._apply_action_target(
+                not self._pre_press_long_state, self._get_long_press_outputs(), toggle=True
+            )
+        elif self._long_press_action == LONG_PRESS_ACTION_COVER_MOVE:
+            await self._start_held_covers(self._get_long_press_outputs())
         elif self._long_press_action in (LONG_PRESS_ACTION_DIM_UP, LONG_PRESS_ACTION_DIM_DOWN, LONG_PRESS_ACTION_DIM_AUTO):
             self._dim_task = self.hass.async_create_task(self._apply_dim_loop())
 
@@ -1192,9 +1233,13 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
             await self._apply_action_target(False, self._get_double_press_outputs())
         elif self._double_press_action == DOUBLE_PRESS_ACTION_TOGGLE:
             # Toggle the double press outputs from their own state before the press.
-            await self._apply_action_target(not self._pre_press_double_state, self._get_double_press_outputs())
+            await self._apply_action_target(
+                not self._pre_press_double_state, self._get_double_press_outputs(), toggle=True
+            )
 
-    async def _apply_action_target(self, turn_on: bool, entity_ids: list[str]) -> None:
+    async def _apply_action_target(
+        self, turn_on: bool, entity_ids: list[str], toggle: bool = False
+    ) -> None:
         """Switch a double/long press output list, updating the switch only for its own outputs.
 
         The switch mirrors its primary outputs; a dedicated double/long press list
@@ -1203,23 +1248,99 @@ class SwitchControlEntity(SwitchEntity, RestoreEntity):
         if self._is_primary(entity_ids):
             self._attr_is_on = turn_on
             self.async_write_ha_state()
-        await self._apply_outputs(turn_on, entity_ids)
+        await self._apply_outputs(turn_on, entity_ids, toggle=toggle)
 
-    async def _apply_outputs(self, turn_on: bool, entity_ids: list[str] | None = None) -> None:
+    async def _apply_outputs(
+        self, turn_on: bool, entity_ids: list[str] | None = None, toggle: bool = False
+    ) -> None:
         """Turn output entities on or off.
 
         Uses ``entity_ids`` when provided, otherwise falls back to the main
         ``_output_entity_ids`` list (press/default outputs).
+
+        Covers open for on and close for off. ``toggle`` (a press) steps a
+        cover instead: stop it while moving, otherwise move it the other way.
         """
         targets = entity_ids if entity_ids is not None else self._output_entity_ids
         for entity_id in targets:
             domain = entity_id.split(".")[0]
+            if domain == "cover":
+                if toggle:
+                    await self._step_cover(entity_id)
+                else:
+                    await self._move_cover(entity_id, "open" if turn_on else "close")
+                continue
             service = "turn_on" if turn_on else "turn_off"
             await self.hass.services.async_call(
                 domain,
                 service,
                 {"entity_id": entity_id},
                 blocking=False,
+            )
+
+    def _cover_next_direction(self, entity_id: str) -> str:
+        """Which way a press should move a stopped cover."""
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state == COVER_CLOSED:
+            return "open"
+        position = state.attributes.get("current_position")
+        if position is None or position >= 100:
+            return "close"  # fully open, or open without a known position
+        if position <= 0:
+            return "open"
+        last = self._cover_direction.get(entity_id)
+        if last is not None:
+            return "close" if last == "open" else "open"
+        return "close" if position >= 50 else "open"
+
+    async def _move_cover(self, entity_id: str, direction: str) -> None:
+        self._cover_direction[entity_id] = direction
+        await self.hass.services.async_call(
+            "cover",
+            "open_cover" if direction == "open" else "close_cover",
+            {"entity_id": entity_id},
+            blocking=False,
+        )
+
+    def _cover_can_stop(self, entity_id: str) -> bool:
+        state = self.hass.states.get(entity_id)
+        features = state.attributes.get("supported_features", 0) if state else 0
+        return bool(int(features) & COVER_SUPPORT_STOP)
+
+    async def _step_cover(self, entity_id: str) -> None:
+        """One-button blind: stop it while it moves, otherwise go the other way."""
+        state = self.hass.states.get(entity_id)
+        if state is not None and state.state in (COVER_OPENING, COVER_CLOSING):
+            if self._cover_can_stop(entity_id):
+                await self.hass.services.async_call(
+                    "cover", "stop_cover", {"entity_id": entity_id}, blocking=False
+                )
+            else:
+                # Can't stop: turn it round instead.
+                await self._move_cover(
+                    entity_id, "close" if state.state == COVER_OPENING else "open"
+                )
+            return
+        await self._move_cover(entity_id, self._cover_next_direction(entity_id))
+
+    async def _start_held_covers(self, entity_ids: list[str]) -> None:
+        """Move the covers for as long as the button is held."""
+        for entity_id in entity_ids:
+            if entity_id.split(".")[0] != "cover":
+                continue
+            state = self.hass.states.get(entity_id)
+            if state is not None and state.state in (COVER_OPENING, COVER_CLOSING):
+                direction = "open" if state.state == COVER_OPENING else "close"
+            else:
+                direction = self._cover_next_direction(entity_id)
+            await self._move_cover(entity_id, direction)
+            if self._cover_can_stop(entity_id):
+                self._covers_held.append(entity_id)
+
+    async def _stop_covers(self, entity_ids: list[str]) -> None:
+        for entity_id in entity_ids:
+            await self.hass.services.async_call(
+                "cover", "stop_cover", {"entity_id": entity_id}, blocking=False
             )
 
     async def async_turn_on(self, **kwargs: Any) -> None:

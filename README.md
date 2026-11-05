@@ -2,7 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 
-A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.home-assistant.io/) that lets **sensor** entities (on/off inputs) automatically control one or more **output** entities such as lamps (lights) and outlets (switches).
+A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.home-assistant.io/) that lets **sensor** entities (on/off inputs) automatically control one or more **output** entities such as lamps (lights), outlets (switches) and blinds (covers).
 
 ## Features
 
@@ -45,12 +45,12 @@ A [HACS](https://hacs.xyz/) custom integration for [Home Assistant](https://www.
 4. **Step 2…N – Configure each switch input** (repeated for each switch):
    - **Name** – a friendly name for this individual switch (e.g. `Ceiling Light`).
    - **Sensor (input)** – the sensor entity whose state drives the outputs.
-   - **Press outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control on a short press. Also used as the fallback for long press and double press when their specific output lists are empty.
+   - **Press outputs (lamps and outlets)** – one or more `light.*`, `switch.*` or `cover.*` entities to control on a short press. Also used as the fallback for long press and double press when their specific output lists are empty.
    - **Long press action** – what the integration should do with the outputs when the button is held for 0.5 s or longer (see [Long press / hold](#long-press--hold) below).
-   - **Long press outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control on a long press or hold. Leave empty to use the press outputs.
+   - **Long press outputs (lamps and outlets)** – one or more `light.*`, `switch.*` or `cover.*` entities to control on a long press or hold. Leave empty to use the press outputs.
    - **Dim auto threshold** – brightness percentage (0–100, default 60) used by the **Dim auto** long press action to decide whether to dim up or down. When the current brightness is above this value the light dims down; otherwise it dims up.
    - **Double press action** – what the integration should do with the outputs when the button is pressed twice within 0.4 s (see [Double press](#double-press) below).
-   - **Double press outputs (lamps and outlets)** – one or more `light.*` or `switch.*` entities to control on a double press. Leave empty to use the press outputs.
+   - **Double press outputs (lamps and outlets)** – one or more `light.*`, `switch.*` or `cover.*` entities to control on a double press. Leave empty to use the press outputs.
    - **Press actions** – optional automation actions to run each time the button is pressed (see [Inline automation actions](#inline-automation-actions) below).
    - **Released actions** – optional automation actions to run each time the button is released.
    - **Double press actions** – optional automation actions to run when a double press is detected.
@@ -74,6 +74,18 @@ A momentary press fires the sensor briefly (`on` → `off`). Instead of mirrorin
 | 2nd press | `on` | `off` | all turned **off** |
 
 The toggle starts from what the outputs **actually are**, not from the last state the switch set. If any output is on, a press turns them all off; if all are off, it turns them on. So a press always works the first time, even after the lights were changed from another panel, the app, a dashboard or an automation. The virtual switch follows its outputs the same way. Outputs that are `unavailable` or `unknown` are ignored; if none report a state, the switch falls back to its own last state.
+
+### Blinds (covers)
+
+A blind works like on a one-button blind switch:
+
+| Press | Blind |
+| --- | --- |
+| Short press (or a double press set to **Toggle**) | Moving: **stop**. Stopped: move the **other way** than last time. Closed opens, fully open closes; part-way it reverses the last movement, also one started from the app or a remote. A blind that can't stop turns round instead. |
+| Long press with **Move blind while held** | Moves while the button is held and stops when it is released. If the blind is already moving, it keeps going that way. |
+| **Turn on / Turn off** actions, or the switch entity | Open / close. |
+
+The switch entity is on while its blinds are open (or opening) and off when they are closed. Lights and switches on the same button keep toggling as before. Play mode leaves blinds alone.
 
 ### Double press
 
@@ -132,6 +144,7 @@ The **Long press action** setting (configured per switch input) lets you choose 
 | **Dim up** | Repeatedly increases the brightness of all configured `light` entities by 10 % every 0.3 s while the button is held. Stops when the button is released. |
 | **Dim down** | Repeatedly decreases the brightness of all configured `light` entities by 10 % every 0.3 s while the button is held. Stops when the button is released. |
 | **Dim auto** | Automatically chooses the dim direction at the start of the long press based on the current brightness. Dims **down** when brightness is above the configured threshold (default 60 %), and **up** when below. Useful when you always want to dim toward a mid-level without having to remember which direction the lights are currently at. |
+| **Move blind while held** | Moves the configured `cover` entities while the button is held (the way they last didn't go, like a short press) and stops them on release. |
 
 Events are always fired regardless of the action settings, so you can combine a built-in action with automation logic if needed.
 
